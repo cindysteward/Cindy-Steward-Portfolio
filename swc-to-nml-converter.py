@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Summer Internship Code -- Created by WardDPeeters; my task was to continue the code, update it and introduce some new functions.
+EMC Neurocomputing Lab Code -- Created by WardDPeeters; my task was to continue the code, update it and introduce some new functions.
 @author: cindysteward
 """
 

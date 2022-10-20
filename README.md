@@ -1,6 +1,6 @@
 # Welcome to my Porfolio!
 
-Hi! I'm Cindy, and this is my portfolio for my coding and learning projects as I study Python, Matlab, Machine Learning and XCode / Swift.
+Hi! I'm Cindy, and this is my portfolio for my coding and learning projects as I study Python, Matlab, Machine Learning and AI.
 Some key features of this portfolio are:
 1. Some of my finished projects, either through university or in my free time.
 2. Short projects to learn a new command or process.

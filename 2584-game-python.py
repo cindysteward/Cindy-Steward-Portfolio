@@ -152,7 +152,7 @@ class Game(tk.Frame):
             frame_instructions.place(relx=0.5, y=70, anchor="center") #it is positioned at the center of the top of the window, and anchored at the center of the screen.
             tk.Label(
                 frame_instructions, #add label text, which includes the instructions.
-                text="Welcome to 2584! Match the corresponding Fibonacci number! \n Use ASWD keys to move the complete board and use \n the arrow keys to move the small boards. Reach 2484 to win!"
+                text="Welcome to 2584! Match the corresponding Fibonacci number! \n Use ASWD keys to move the complete board and use \n the arrow keys to move the small boards. Reach 2584 to win!"
                 ).grid()
             frame_score = tk.Frame(self) #here we create the frame to save the score. This is another frame variable.
             frame_score.place(relx=0.1, y=95, anchor="center") #it is positioned at the center of the top of the window, and anchored at the center of the screen.

@@ -6,6 +6,8 @@ Created on Tue Oct 18 21:14:37 2022
 Source: https://realpython.com/face-recognition-with-python/#installing-opencv
 Use in terminal: $ python face_detection_code.py [insert filename.png] haarcascade_frontalface_default.xml
 
+Other useful resources: https://pypi.org/project/face-recognition/
+
 @author: cindysteward
 """
 

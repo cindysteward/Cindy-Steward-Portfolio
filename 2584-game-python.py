@@ -1,3 +1,7 @@
+#This file contains the code for a spin pon the game 2048. The numbers are based off the Fibonacci numbers, and there's a 3D board, meaning both a 2x2
+#and 4x4 board that can be moved using the asdw and arrow keys. This code is further connected to a specially designed GUI.
+#This was written in Spyder Anaconda.
+
 import numpy as np #importing numpy to use for making arrays and generating random numbers
 import tkinter as tk #importing tkinter for the GUI
 

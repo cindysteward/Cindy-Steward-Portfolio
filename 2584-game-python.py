@@ -1,4 +1,4 @@
-#This file contains the code for a spin pon the game 2048. The numbers are based off the Fibonacci numbers, and there's a 3D board, meaning both a 2x2
+#This file contains the code for a spin on the game 2048. The numbers are based off the Fibonacci numbers, and there's a 3D board, meaning both a 2x2
 #and 4x4 board that can be moved using the asdw and arrow keys. This code is further connected to a specially designed GUI.
 #This was written in Spyder Anaconda.
 

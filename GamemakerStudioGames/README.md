@@ -1,1 +1,2 @@
-These are some games I have created using Gamemaker Studio 2. These were created in collaboration.
+# minigame-gamemakerstudio2
+Some minigames I made using gamemaker studio 2. 

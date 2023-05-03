@@ -6,4 +6,6 @@ Some key features of this portfolio are:
 2. Assignments completed through my education and university courses.
 3. Projects based on a source to learn new mechanics and possibilities.
 
+Note that both Gradio and Streamlit projects consist of Python projects that have been visualized through these respective APIs.
+
 Thank you for taking a look!

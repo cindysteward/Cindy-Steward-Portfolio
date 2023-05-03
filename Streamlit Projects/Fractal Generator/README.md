@@ -1,2 +1,1 @@
-Follow this link to view the running code:
-https://huggingface.co/spaces/cindysteward/FractalGenerator
+To run the file, run the document and "streamlit run streamlit_fractal_generator.py" in the terminal, after downloading the file.

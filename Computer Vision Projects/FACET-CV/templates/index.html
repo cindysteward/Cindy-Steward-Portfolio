@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Facial Analysis Pipeline</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --surface: #ffffff;
+      --border: #d0d5dd;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-fg: #ffffff;
+      --danger: #dc2626;
+      --success: #16a34a;
+      --muted: #6b7280;
+      --text: #111827;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,.10);
+      --gap: 1.25rem;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: .75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; }
+    header span { color: var(--muted); font-size: .85rem; }
+    main {
+      max-width: 1100px;
+      margin: 1.5rem auto;
+      padding: 0 1rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap);
+    }
+    @media (max-width: 720px) {
+      main { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.25rem;
+    }
+    .card h2 {
+      font-size: .8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    .field { margin-bottom: .9rem; }
+    .field label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: .3rem;
+      font-size: .85rem;
+    }
+    .field input[type="text"],
+    .field input[type="number"],
+    .field select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .45rem .65rem;
+      font-size: .9rem;
+      color: var(--text);
+      background: var(--surface);
+      transition: border-color .15s;
+    }
+    .field input:focus,
+    .field select:focus { outline: none; border-color: var(--primary); }
+    .radio-group { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: .25rem; }
+    .radio-group label {
+      display: flex;
+      align-items: center;
+      gap: .35rem;
+      font-weight: 400;
+      cursor: pointer;
+    }
+    .dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      position: relative;
+    }
+    .dropzone.over { border-color: var(--primary); background: #eff6ff; }
+    .dropzone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .dropzone-hint { color: var(--muted); font-size: .82rem; margin-top: .3rem; }
+    .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+    .chip {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 99px;
+      padding: .15rem .65rem;
+      font-size: .78rem;
+      display: flex; align-items: center; gap: .35rem;
+    }
+    .chip button {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: .9rem; line-height: 1; padding: 0;
+    }
+    .chip button:hover { color: var(--danger); }
+    .single-file-display {
+      font-size: .82rem;
+      color: var(--muted);
+      margin-top: .4rem;
+    }
+    .checkbox-row {
+      display: flex; align-items: center; gap: .5rem; margin-bottom: .7rem;
+    }
+    .checkbox-row label { font-weight: 400; cursor: pointer; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+      padding: .6rem 1.4rem;
+      border: none; border-radius: var(--radius);
+      font-size: .9rem; font-weight: 600; cursor: pointer;
+      transition: background .15s, opacity .15s;
+    }
+    .btn-primary { background: var(--primary); color: var(--primary-fg); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-run { width: 100%; padding: .75rem; font-size: 1rem; margin-top: .5rem; }
+    #progress-section { display: none; }
+    .progress-bar-wrap {
+      height: 10px;
+      background: #e5e7eb;
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: .5rem;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 99px;
+      width: 0%;
+      transition: width .3s ease;
+    }
+    .progress-bar-fill.error { background: var(--danger); }
+    #progress-status { font-size: .85rem; color: var(--muted); }
+    #results-section { display: none; }
+    .result-profile { margin-bottom: 1.2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+    .result-profile:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+    .result-profile h3 { font-size: .9rem; font-weight: 600; margin-bottom: .5rem; }
+    .download-links { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+    .download-link {
+      font-size: .8rem;
+      color: var(--primary);
+      text-decoration: none;
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      padding: .2rem .55rem;
+    }
+    .download-link:hover { background: #eff6ff; }
+    .screening-table { width: 100%; border-collapse: collapse; margin-top: .6rem; font-size: .82rem; }
+    .screening-table th, .screening-table td {
+      border: 1px solid var(--border);
+      padding: .35rem .6rem;
+      text-align: left;
+    }
+    .screening-table th { background: #f9fafb; font-weight: 600; }
+    .thumb-row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .6rem; }
+    .thumb-row img {
+      width: 160px;
+      height: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      object-fit: cover;
+    }
+    .flag-positive { color: var(--danger); font-weight: 600; }
+    .flag-negative { color: var(--success); }
+    .col-span { grid-column: 1 / -1; }
+    .error-msg { color: var(--danger); font-size: .85rem; margin-top: .5rem; }
+    /* Reference sessions card */
+    #reference-card { grid-column: 1 / -1; }
+    #reference-card .session-table {
+      width: 100%; border-collapse: collapse; margin-top: .75rem;
+      font-size: .82rem;
+    }
+    #reference-card .session-table th,
+    #reference-card .session-table td {
+      border: 1px solid var(--border); padding: .3rem .55rem; text-align: left;
+    }
+    #reference-card .session-table th { background: #f9fafb; font-weight: 600; }
+    #reference-card .session-table tr.selected { background: #eff6ff; }
+    /* Disorder blocks */
+    .disorder-block { margin-bottom: 1.25rem; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+    .disorder-block h3 { font-size: .9rem; font-weight: 600; margin-bottom: .6rem; }
+    .badge { display: inline-block; border-radius: 99px; padding: .15rem .6rem; font-size: .75rem; font-weight: 600; margin-right: .35rem; }
+    .badge-ok   { background: #dcfce7; color: #166534; }
+    .badge-warn { background: #fef9c3; color: #854d0e; }
+    .badge-flag { background: #fee2e2; color: #991b1b; }
+    /* Thumbnail grid */
+    .thumb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: .5rem; margin-top: .6rem; }
+    .thumb-grid img { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; object-fit: cover; cursor: pointer; }
+    .thumb-grid img:hover { border-color: var(--primary); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Facial Analysis Pipeline</h1>
+    <span>Study Prompter Integration</span>
+  </header>
+
+  <!-- Status Bar -->
+  <div id="status-bar" style="background: var(--surface); border-bottom: 1px solid var(--border); padding: .75rem 1.5rem; display: flex; gap: 1.5rem; align-items: center; font-size: .85rem;">
+    <div id="model-status" style="display: flex; align-items: center; gap: .35rem;">
+      <span id="model-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #fbbf24;"></span>
+      <span id="model-label">Model: Loading…</span>
+    </div>
+    <div id="normative-status" style="display: flex; align-items: center; gap: .35rem;">
+      <span id="norm-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #d1d5db;"></span>
+      <span id="norm-label">Normative: Not Available</span>
+      <button type="button" id="build-normative-btn" style="margin-left: .5rem; padding: .25rem .5rem; font-size: .75rem; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 4px; cursor: pointer;">Build</button>
+    </div>
+    <div id="kinematic-status" style="display: flex; align-items: center; gap: .35rem;">
+      <span id="kin-indicator" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #d1d5db;"></span>
+      <span id="kin-label">Kinematic Profiles: Not Available</span>
+    </div>
+  </div>
+
+  <main>
+    <form id="pipeline-form" novalidate>
+      <div class="card">
+        <h2>Session Config</h2>
+        <div class="field">
+          <label for="subject-id">Subject ID</label>
+          <input type="text" id="subject-id" name="subject_id" placeholder="e.g. PRE01U" required />
+        </div>
+        <div class="field">
+          <label for="session-label">Session Label</label>
+          <input type="text" id="session-label" name="session_label" placeholder="e.g. test" required />
+        </div>
+        <div class="field">
+          <label>Study Mode</label>
+          <div class="radio-group">
+            <label><input type="radio" name="study_mode" value="pilot" checked /> pilot</label>
+            <label><input type="radio" name="study_mode" value="patient" /> patient</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Input Files</h2>
+        <div class="field">
+          <label>Camera Video Paths <small style="font-weight:400;color:var(--muted)">(1–4 files, one path per line; or a single pre-extracted landmarks .csv)</small></label>
+          <textarea
+            id="camera-video-paths"
+            name="camera_video_paths"
+            rows="4"
+            placeholder="/path/to/P001_cam1_2026-03-18_143000.webm&#10;/path/to/P001_cam2_2026-03-18_143000.webm&#10;&#10;— or pre-extracted landmarks —&#10;/path/to/PA1_intra_op_all_timepoints_raw_landmarks.csv"
+            style="width:100%;padding:.45rem .65rem;border:1px solid var(--border);border-radius:6px;
+                   font-size:.82rem;font-family:monospace;color:var(--text);background:var(--surface);
+                   resize:vertical;"
+          ></textarea>
+          <div class="error-msg" id="video-error" style="display:none"></div>
+        </div>
+        <div class="field">
+          <label for="timestamps-csv">Timestamps CSV <small style="font-weight:400;color:var(--muted)">(optional — omit for continuous analysis mode)</small></label>
+          <div class="dropzone" id="ts-dropzone" style="padding:.75rem 1rem">
+            <input type="file" id="timestamps-csv" name="timestamps_csv" accept=".csv" />
+            <div>Drop timestamps CSV or click to browse</div>
+          </div>
+          <div class="single-file-display" id="ts-display"></div>
+        </div>
+        <div class="field">
+          <label for="assembly-csv">Assembly CSV <small style="font-weight:400;color:var(--muted)">(optional — COMBINED profile)</small></label>
+          <div class="dropzone" id="asm-dropzone" style="padding:.75rem 1rem">
+            <input type="file" id="assembly-csv" name="assembly_csv" accept=".csv" />
+            <div>Drop assembly CSV or click to browse</div>
+          </div>
+          <div class="single-file-display" id="asm-display"></div>
+        </div>
+        <div class="field">
+          <label for="recording-meta">Recording Metadata JSON <small style="font-weight:400;color:var(--muted)">(optional)</small></label>
+          <div class="dropzone" id="meta-dropzone" style="padding:.75rem 1rem">
+            <input type="file" id="recording-meta" name="recording_meta" accept=".json" />
+            <div>Drop metadata JSON or click to browse</div>
+          </div>
+          <div class="single-file-display" id="meta-display"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Options</h2>
+        <div class="checkbox-row">
+          <input type="checkbox" id="export-db" name="export_db" />
+          <label for="export-db">Export results to SQLite database</label>
+        </div>
+        <div class="field" style="margin-top:.75rem;">
+          <label style="font-size:.82rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);display:block;margin-bottom:.4rem;">
+            Output Video
+            <small style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)"> — skip to speed up analysis</small>
+          </label>
+          <div style="display:flex;flex-wrap:wrap;gap:.5rem .9rem;">
+            <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.9rem;">
+              <input type="radio" name="video_mode" value="none" checked /> Skip (faster)
+            </label>
+            <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.9rem;">
+              <input type="radio" name="video_mode" value="annotated" /> Annotated video
+            </label>
+            <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.9rem;">
+              <input type="radio" name="video_mode" value="landmark" /> Landmark only
+            </label>
+            <label style="display:flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.9rem;">
+              <input type="radio" name="video_mode" value="both" /> Both
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Analysis Options</h2>
+        <div class="checkbox-row">
+          <input type="checkbox" id="enable-continuous-anomaly" name="enable_continuous_anomaly" checked />
+          <label for="enable-continuous-anomaly">Continuous anomaly detection (sliding window)</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="enable-normative-comparison" name="enable_normative_comparison" checked />
+          <label for="enable-normative-comparison">Normative comparison (if reference available)</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="enable-kinematic-analysis" name="enable_kinematic_analysis" checked />
+          <label for="enable-kinematic-analysis">Kinematic speech analysis (Palmer et al. 2024)</label>
+        </div>
+        <div class="field" style="margin-top: .75rem;">
+          <label for="task-group-filter">Task Group Filter <small style="font-weight:400;color:var(--muted)">(leave blank for all)</small></label>
+          <select id="task-group-filter" name="task_group_filter">
+            <option value="">All task groups</option>
+            <option value="A">A (baseline)</option>
+            <option value="B">B (non-speech motor)</option>
+            <option value="C">C (articulation)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card col-span" id="reference-card">
+        <h2>Reference Sessions <small style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">(optional — auto-discovered if left blank)</small></h2>
+        <div class="field">
+          <label for="reference-sessions">Reference Session IDs <small style="font-weight:400;color:var(--muted)">(comma-separated, or tick sessions below)</small></label>
+          <input type="text" id="reference-sessions" name="reference_sessions" placeholder="e.g. P001_baseline_20260101_120000" />
+        </div>
+        <div class="field" style="display:flex;gap:.5rem;align-items:flex-end;margin-top:.25rem">
+          <div style="flex:1">
+            <label for="ref-subject-search" style="font-size:.82rem;color:var(--muted)">Browse sessions by subject ID</label>
+            <input type="text" id="ref-subject-search" placeholder="Type any subject ID…" style="width:100%;padding:.35rem .55rem;font-size:.88rem;border:1px solid var(--border);border-radius:var(--radius);" />
+          </div>
+          <button type="button" id="ref-subject-search-btn" class="btn btn-secondary" style="padding:.38rem .9rem;font-size:.85rem;white-space:nowrap">Search</button>
+        </div>
+        <div id="sessions-list-wrap" style="display:none">
+          <table class="session-table" id="sessions-table">
+            <thead><tr><th></th><th>Session ID</th><th>Subject</th><th>Label</th><th>Created</th><th>Type</th><th>#Ind.</th><th>Has Ref?</th></tr></thead>
+            <tbody id="sessions-tbody"></tbody>
+          </table>
+          <div id="sessions-selected-count" style="font-size:.82rem;color:var(--muted);margin-top:.3rem"></div>
+        </div>
+        <div id="sessions-error" class="error-msg" style="display:none"></div>
+      </div>
+
+      <div class="card">
+        <h2>Run</h2>
+        <button type="submit" class="btn btn-primary btn-run" id="run-btn">Run Analysis</button>
+        <button type="button" class="btn btn-secondary" id="raw-export-btn" style="margin-top:.5rem;background:var(--border);color:var(--text);" title="Extract raw MediaPipe landmarks only (no analysis). Downloads a CSV.">Export Raw Landmarks CSV</button>
+        <div class="error-msg" id="form-error" style="display:none"></div>
+      </div>
+    </form>
+
+    <div id="right-column">
+      <div class="card" id="progress-section">
+        <h2>Progress</h2>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div id="progress-status">Initializing…</div>
+      </div>
+
+      <div class="card" id="results-section">
+        <h2>Results</h2>
+        <div id="results-tabs" style="display: flex; gap: .5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border); padding-bottom: .5rem;">
+          <button type="button" id="tab-summary" class="tab-btn" style="background: none; border: none; padding: .5rem .75rem; cursor: pointer; color: var(--primary); border-bottom: 2px solid var(--primary); font-weight: 600;">Summary</button>
+          <button type="button" id="tab-anomaly" class="tab-btn" style="background: none; border: none; padding: .5rem .75rem; cursor: pointer; color: var(--muted);">Anomaly Timeline</button>
+          <button type="button" id="tab-kinematic" class="tab-btn" style="background: none; border: none; padding: .5rem .75rem; cursor: pointer; color: var(--muted);">Kinematic Profiles</button>
+        </div>
+        <div id="tab-summary-content" style="display: block;">
+          <div id="results-content"></div>
+        </div>
+        <div id="tab-anomaly-content" style="display: none;">
+          <canvas id="anomaly-timeline" width="700" height="300" style="width: 100%; max-width: 100%; border: 1px solid var(--border); border-radius: var(--radius); background: #fafbfc;"></canvas>
+          <div id="anomaly-metadata" style="font-size: .82rem; color: var(--muted); margin-top: .5rem;"></div>
+        </div>
+        <div id="tab-kinematic-content" style="display: none;">
+          <div id="kinematic-pdf-container" style="background: #f9fafb; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem;">
+            <p style="color: var(--muted); text-align: center;">Loading kinematic profiles PDF…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      function wireSimpleDropzone(inputId, displayId) {
+        const input = document.getElementById(inputId);
+        const display = document.getElementById(displayId);
+        input.addEventListener("change", function () {
+          display.textContent = input.files.length ? input.files[0].name : "";
+        });
+        const dropzone = input.closest(".dropzone");
+        dropzone.addEventListener("dragover", function (e) {
+          e.preventDefault();
+          dropzone.classList.add("over");
+        });
+        dropzone.addEventListener("dragleave", function () { dropzone.classList.remove("over"); });
+        dropzone.addEventListener("drop", function (e) {
+          e.preventDefault();
+          dropzone.classList.remove("over");
+          if (e.dataTransfer.files.length) {
+            const dt = new DataTransfer();
+            dt.items.add(e.dataTransfer.files[0]);
+            input.files = dt.files;
+            display.textContent = e.dataTransfer.files[0].name;
+          }
+        });
+      }
+      wireSimpleDropzone("timestamps-csv", "ts-display");
+      wireSimpleDropzone("assembly-csv", "asm-display");
+      wireSimpleDropzone("recording-meta", "meta-display");
+
+      /* ---- Reference session discovery ---- */
+      var _sessionsDebounce = null;
+      var _lastSessionsKey = "";
+
+      function _maybeLoadSessions() {
+        var subj = document.getElementById("subject-id").value.trim();
+        var mode = (document.querySelector("input[name='study_mode']:checked") || {}).value || "pilot";
+        var key = subj + "|" + mode;
+        if (!subj || key === _lastSessionsKey) { return; }
+        clearTimeout(_sessionsDebounce);
+        _sessionsDebounce = setTimeout(function () { _loadSessions(subj, mode); }, 400);
+      }
+
+      function _loadSessions(subj, mode) {
+        _lastSessionsKey = subj + "|" + mode;
+        var wrap = document.getElementById("sessions-list-wrap");
+        var errEl = document.getElementById("sessions-error");
+        errEl.style.display = "none";
+        fetch("/sessions?subject_id=" + encodeURIComponent(subj) + "&study_mode=" + encodeURIComponent(mode))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.error) { errEl.textContent = data.error; errEl.style.display = "block"; wrap.style.display = "none"; return; }
+            _renderSessionsList(data.sessions || [], subj);
+          })
+          .catch(function () { wrap.style.display = "none"; });
+      }
+
+      function _renderSessionsList(sessions, subjectLabel) {
+        var wrap = document.getElementById("sessions-list-wrap");
+        var tbody = document.getElementById("sessions-tbody");
+        if (!sessions.length) {
+          if (!tbody.children.length) wrap.style.display = "none";
+          return;
+        }
+        // preserve already-checked values so merging from multiple subjects works
+        var alreadyChecked = new Set(
+          Array.from(document.querySelectorAll("#sessions-tbody input[type='checkbox']:checked")).map(function (cb) { return cb.value; })
+        );
+        tbody.innerHTML = "";
+        sessions.forEach(function (s) {
+          var tr = document.createElement("tr");
+          var cbTd = document.createElement("td");
+          var cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.value = s.session_id;
+          if (alreadyChecked.has(s.session_id)) {
+            cb.checked = true;
+            tr.classList.add("selected");
+          }
+          cb.addEventListener("change", function () {
+            tr.classList.toggle("selected", cb.checked);
+            _updateReferenceInput();
+          });
+          cbTd.appendChild(cb);
+          tr.appendChild(cbTd);
+          // subject column derived from session_id prefix
+          var subj = subjectLabel || (s.session_id ? s.session_id.split("_")[0] : "");
+          var isRef = !!s.is_baseline_session;
+          [s.session_id, subj, s.session_label || "", s.created_at || ""].forEach(function (val) {
+            var td = document.createElement("td"); td.textContent = val; tr.appendChild(td);
+          });
+          // Type column — badge style
+          var typeTd = document.createElement("td");
+          var typeBadge = document.createElement("span");
+          typeBadge.textContent = isRef ? "reference" : "test";
+          typeBadge.style.cssText = "font-size:.75rem;padding:.1rem .4rem;border-radius:4px;font-weight:600;" +
+            (isRef ? "background:#dbeafe;color:#1d4ed8;" : "background:#f3f4f6;color:#6b7280;");
+          typeTd.appendChild(typeBadge);
+          tr.appendChild(typeTd);
+          [s.n_indications != null ? s.n_indications : "", s.has_reference_data ? "yes" : "no"].forEach(function (val) {
+            var td = document.createElement("td"); td.textContent = val; tr.appendChild(td);
+          });
+          tbody.appendChild(tr);
+        });
+        wrap.style.display = "";
+        _updateSelectedCount();
+      }
+
+      function _updateReferenceInput() {
+        var checked = Array.from(document.querySelectorAll("#sessions-tbody input[type='checkbox']:checked")).map(function (cb) { return cb.value; });
+        document.getElementById("reference-sessions").value = checked.join(", ");
+        _updateSelectedCount();
+      }
+
+      function _updateSelectedCount() {
+        var n = document.querySelectorAll("#sessions-tbody input[type='checkbox']:checked").length;
+        var el = document.getElementById("sessions-selected-count");
+        if (el) el.textContent = n > 0 ? n + " session" + (n > 1 ? "s" : "") + " selected as reference" : "";
+      }
+
+      document.getElementById("subject-id").addEventListener("input", _maybeLoadSessions);
+      document.querySelectorAll("input[name='study_mode']").forEach(function (r) { r.addEventListener("change", _maybeLoadSessions); });
+
+      // Reference subject search button
+      document.getElementById("ref-subject-search-btn").addEventListener("click", function () {
+        var subj = document.getElementById("ref-subject-search").value.trim();
+        if (!subj) return;
+        var mode = (document.querySelector("input[name='study_mode']:checked") || {}).value || "pilot";
+        var errEl = document.getElementById("sessions-error");
+        errEl.style.display = "none";
+        fetch("/sessions?subject_id=" + encodeURIComponent(subj) + "&study_mode=" + encodeURIComponent(mode))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.error) { errEl.textContent = data.error; errEl.style.display = "block"; return; }
+            _renderSessionsList(data.sessions || [], subj);
+          })
+          .catch(function () { errEl.textContent = "Failed to load sessions."; errEl.style.display = "block"; });
+      });
+      document.getElementById("ref-subject-search").addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); document.getElementById("ref-subject-search-btn").click(); }
+      });
+
+      const form = document.getElementById("pipeline-form");
+      const runBtn = document.getElementById("run-btn");
+      const rawExportBtn = document.getElementById("raw-export-btn");
+      const formError = document.getElementById("form-error");
+      const progressSection = document.getElementById("progress-section");
+      const progressFill = document.getElementById("progress-fill");
+      const progressStatus = document.getElementById("progress-status");
+      const resultsSection = document.getElementById("results-section");
+      const resultsContent = document.getElementById("results-content");
+
+      var evtSource = null;
+      var _currentJobId = null;
+      var _currentRawExportJobId = null;
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        formError.style.display = "none";
+
+        var videoPaths = document.getElementById("camera-video-paths").value.trim();
+        if (!videoPaths) {
+          formError.textContent = "At least one camera video path is required.";
+          formError.style.display = "block";
+          return;
+        }
+        const tsInput = document.getElementById("timestamps-csv");
+        if (!tsInput.files.length) {
+          formError.textContent = "Timestamps CSV is required.";
+          formError.style.display = "block";
+          return;
+        }
+
+        const fd = new FormData(form);
+
+        runBtn.disabled = true;
+        progressFill.style.width = "0%";
+        progressFill.classList.remove("error");
+        progressStatus.textContent = "Submitting…";
+        progressSection.style.display = "block";
+        resultsSection.style.display = "none";
+        resultsContent.innerHTML = "";
+
+        fetch("/run", { method: "POST", body: fd })
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data.status !== "started") {
+              formError.textContent = data.message || "Failed to start pipeline.";
+              formError.style.display = "block";
+              runBtn.disabled = false;
+              return;
+            }
+            _currentJobId = data.job_id;
+            startSSE(_currentJobId);
+          })
+          .catch(function (err) {
+            formError.textContent = "Network error: " + err.message;
+            formError.style.display = "block";
+            runBtn.disabled = false;
+          });
+      });
+
+      rawExportBtn.addEventListener("click", function () {
+        formError.style.display = "none";
+        formError.style.color = "var(--danger)";
+        var videoPaths = document.getElementById("camera-video-paths").value.trim();
+        if (!videoPaths) {
+          formError.textContent = "At least one camera video path is required.";
+          formError.style.display = "block";
+          return;
+        }
+        var fd = new FormData(form);
+        rawExportBtn.disabled = true;
+        rawExportBtn.textContent = "Starting extraction…";
+        progressFill.style.width = "0%";
+        progressFill.classList.remove("error");
+        progressStatus.textContent = "Submitting…";
+        progressSection.style.display = "block";
+        fetch("/api/run_raw_export", { method: "POST", body: fd })
+          .then(function (res) {
+            if (!res.ok) { return res.json().then(function (d) { throw new Error(d.message || "Export failed"); }); }
+            return res.json();
+          })
+          .then(function (data) {
+            if (data.status !== "started") {
+              formError.textContent = data.message || "Failed to start extraction.";
+              formError.style.display = "block";
+              rawExportBtn.disabled = false;
+              rawExportBtn.textContent = "Export Raw Landmarks CSV";
+              progressSection.style.display = "none";
+              return;
+            }
+            _currentRawExportJobId = data.job_id;
+            startRawExportSSE(_currentRawExportJobId);
+          })
+          .catch(function (err) {
+            formError.textContent = "Export error: " + err.message;
+            formError.style.display = "block";
+            rawExportBtn.disabled = false;
+            rawExportBtn.textContent = "Export Raw Landmarks CSV";
+            progressSection.style.display = "none";
+          });
+      });
+
+      var _sseRetries = 0;
+      var _sseDone = false;
+      function startSSE(jobId) {
+        if (evtSource) { evtSource.close(); }
+        _sseRetries = 0;
+        _sseDone = false;
+        _openSSE(jobId);
+      }
+      function _openSSE(jobId) {
+        evtSource = new EventSource("/progress/" + encodeURIComponent(jobId));
+        evtSource.onmessage = function (e) {
+          var data;
+          try { data = JSON.parse(e.data); } catch (_) { return; }
+          var step = data.step || "";
+          var pct = typeof data.pct === "number" ? data.pct : -1;
+
+          if (step === "waiting") { return; }
+          _sseRetries = 0; // reset retry counter on any real event
+
+          if (pct >= 0) {
+            progressFill.style.width = pct + "%";
+          }
+          if (step.startsWith("Error:")) {
+            progressFill.classList.add("error");
+            progressStatus.textContent = step;
+            progressFill.style.width = "100%";
+            _sseDone = true;
+            evtSource.close();
+            runBtn.disabled = false;
+            return;
+          }
+          progressStatus.textContent = step;
+          if (step === "done") {
+            _sseDone = true;
+            evtSource.close();
+            runBtn.disabled = false;
+            loadResults(jobId);
+          }
+        };
+        evtSource.onerror = function () {
+          evtSource.close();
+          evtSource = null;
+          if (_sseDone) { return; }
+          if (_sseRetries < 5) {
+            _sseRetries++;
+            progressStatus.textContent = "Reconnecting... (attempt " + _sseRetries + ")";
+            setTimeout(function() { _openSSE(jobId); }, 2000);
+          } else {
+            progressStatus.textContent = "Connection lost. Check server logs.";
+            progressFill.classList.add("error");
+            runBtn.disabled = false;
+          }
+        };
+      }
+
+      var _rawExportRetries = 0;
+      var _rawExportDone = false;
+      function startRawExportSSE(jobId) {
+        if (evtSource) { evtSource.close(); }
+        _rawExportRetries = 0;
+        _rawExportDone = false;
+        _openRawExportSSE(jobId);
+      }
+      function _openRawExportSSE(jobId) {
+        evtSource = new EventSource("/progress/" + encodeURIComponent(jobId));
+        evtSource.onmessage = function (e) {
+          var data;
+          try { data = JSON.parse(e.data); } catch (_) { return; }
+          var step = data.step || "";
+          var pct = typeof data.pct === "number" ? data.pct : -1;
+
+          if (step === "waiting") { return; }
+          _rawExportRetries = 0;
+
+          if (pct >= 0) {
+            progressFill.style.width = pct + "%";
+          }
+          if (step.startsWith("Error:")) {
+            progressFill.classList.add("error");
+            progressStatus.textContent = step;
+            progressFill.style.width = "100%";
+            _rawExportDone = true;
+            evtSource.close();
+            rawExportBtn.disabled = false;
+            rawExportBtn.textContent = "Export Raw Landmarks CSV";
+            return;
+          }
+          progressStatus.textContent = step;
+          if (step === "Done!" || pct === 100) {
+            _rawExportDone = true;
+            evtSource.close();
+            rawExportBtn.disabled = false;
+            rawExportBtn.textContent = "Export Raw Landmarks CSV";
+            // Show success message
+            var filename = data.filename || "raw_landmarks.csv";
+            formError.textContent = "✓ Extraction complete! File saved: " + filename;
+            formError.style.color = "var(--success)";
+            formError.style.display = "block";
+            progressSection.style.display = "none";
+          }
+        };
+        evtSource.onerror = function () {
+          evtSource.close();
+          evtSource = null;
+          if (_rawExportDone) { return; }
+          if (_rawExportRetries < 5) {
+            _rawExportRetries++;
+            progressStatus.textContent = "Reconnecting... (attempt " + _rawExportRetries + ")";
+            setTimeout(function() { _openRawExportSSE(jobId); }, 2000);
+          } else {
+            progressStatus.textContent = "Connection lost. Check server logs.";
+            progressFill.classList.add("error");
+            rawExportBtn.disabled = false;
+            rawExportBtn.textContent = "Export Raw Landmarks CSV";
+          }
+        };
+      }
+
+      function loadResults(jobId) {
+        var url = jobId ? "/results/" + encodeURIComponent(jobId) : "/results/" + encodeURIComponent(_currentJobId || "");
+        fetch(url)
+          .then(function (res) { return res.json(); })
+          .then(function (summary) {
+            renderResults(summary);
+          })
+          .catch(function () {
+            resultsContent.innerHTML = "<p>Failed to load results.</p>";
+            resultsSection.style.display = "block";
+          });
+      }
+
+      function _toRelPath(absPath) {
+        // Strip everything up to and including /data/ so it can be served via /download/ or /visualizations/
+        var m = absPath.match(/\/data\/(.*)/);
+        return m ? m[1] : absPath.split("/").pop();
+      }
+
+      function _mkSection(title, container) {
+        var h = document.createElement("p");
+        h.style.cssText = "font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:1rem 0 .35rem;";
+        h.textContent = title;
+        container.appendChild(h);
+      }
+
+      function _renderDisorderBody(profile, container, isBaseline) {
+        var scr = profile.screening_summary || {};
+        var nInd = scr.n_indications || 0;
+        var conf = (scr.confidence || {}).overall;
+
+        // Badge bar
+        var badgeBar = document.createElement("div");
+        badgeBar.style.marginBottom = ".5rem";
+        if (!isBaseline) {
+          var indBadge = document.createElement("span");
+          indBadge.className = "badge " + (nInd === 0 ? "badge-ok" : nInd < 3 ? "badge-warn" : "badge-flag");
+          indBadge.textContent = nInd + " indication" + (nInd === 1 ? "" : "s");
+          badgeBar.appendChild(indBadge);
+          if (conf != null) {
+            var confBadge = document.createElement("span");
+            confBadge.className = "badge badge-ok";
+            confBadge.textContent = "conf: " + (conf * 100).toFixed(0) + "%";
+            badgeBar.appendChild(confBadge);
+          }
+        }
+        container.appendChild(badgeBar);
+
+        // Screening indications detail table
+        var indications = scr.indications || [];
+        if (indications.length) {
+          _mkSection("Screening Indications", container);
+          var tbl = document.createElement("table");
+          tbl.className = "screening-table";
+          var hdr = tbl.createTHead().insertRow();
+          ["Group", "Type", "Severity", "Description"].forEach(function(h) {
+            var th = document.createElement("th"); th.textContent = h; hdr.appendChild(th);
+          });
+          var tbody = tbl.createTBody();
+          indications.forEach(function(ind) {
+            var tr = tbody.insertRow();
+            [ind.task_group || "-", ind.indication_type || "-",
+             ind.severity != null ? ind.severity.toFixed(2) : "-",
+             ind.description || "-"].forEach(function(v) {
+              var td = tr.insertCell(); td.textContent = v;
+            });
+          });
+          container.appendChild(tbl);
+        } else if (scr.indication_types && scr.indication_types.length) {
+          // Fallback: simple list if full indications not available
+          var ul = document.createElement("ul");
+          ul.style.cssText = "margin:.4rem 0 .5rem 1.2rem;font-size:.83rem;";
+          scr.indication_types.forEach(function(t) { var li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+          container.appendChild(ul);
+        }
+
+        // Session metrics table (key numeric values)
+        var sm = profile.session_metrics || {};
+        var smKeys = Object.keys(sm).filter(function(k) { return typeof sm[k] === "number"; });
+        if (smKeys.length) {
+          _mkSection("Session Metrics", container);
+          var tbl2 = document.createElement("table");
+          tbl2.className = "screening-table";
+          var hdr2 = tbl2.createTHead().insertRow();
+          ["Metric", "Value"].forEach(function(h) {
+            var th = document.createElement("th"); th.textContent = h; hdr2.appendChild(th);
+          });
+          var tbody2 = tbl2.createTBody();
+          smKeys.forEach(function(k) {
+            var tr = tbody2.insertRow();
+            var tdK = tr.insertCell(); tdK.textContent = k.replace(/_/g, " ");
+            var tdV = tr.insertCell();
+            tdV.textContent = (Math.abs(sm[k]) < 10 && sm[k] % 1 !== 0) ? sm[k].toFixed(4) : sm[k].toFixed(2);
+          });
+          container.appendChild(tbl2);
+        }
+
+        // Anomaly summary
+        var anomSum = profile.anomaly_summary || {};
+        if (anomSum.n_samples != null) {
+          _mkSection("Anomaly Summary", container);
+          var ap = document.createElement("p");
+          ap.style.cssText = "font-size:.83rem;";
+          var rate = anomSum.anomaly_rate != null ? (anomSum.anomaly_rate * 100).toFixed(1) + "%" : "n/a";
+          ap.textContent = anomSum.n_anomalies + " / " + anomSum.n_samples + " repetitions flagged (" + rate + ")";
+          container.appendChild(ap);
+        }
+
+        // Reference sessions used — only shown for test sessions
+        var refIds = profile.reference_sessions_used || [];
+        if (refIds.length && !isBaseline) {
+          var refP = document.createElement("p");
+          refP.style.cssText = "font-size:.8rem;color:var(--muted);margin:.5rem 0;";
+          refP.textContent = "Reference: " + refIds.join(", ");
+          container.appendChild(refP);
+        }
+
+        // Articulation scores (load from download_paths if articulation_scores.json present)
+        var artPath = (profile.download_paths || []).find(function(p) { return p.endsWith("articulation_scores.json"); });
+        if (artPath) {
+          var artContainer = document.createElement("div");
+          container.appendChild(artContainer);
+          fetch("/download/" + _toRelPath(artPath))
+            .then(function(r) { return r.json(); })
+            .then(function(art) {
+              _mkSection("Articulation Scores", artContainer);
+              // Summary row
+              var sumP = document.createElement("p");
+              sumP.style.cssText = "font-size:.83rem;margin-bottom:.4rem;";
+              var fields = ["mean_articulation_score","word_production_quality","articulation_score_pa","articulation_score_ta","articulation_score_ka","articulation_score_pataka"];
+              var parts = fields.filter(function(f){return art[f]!=null;}).map(function(f){
+                return f.replace(/articulation_score_/,"").replace(/_/g," ") + ": " + art[f].toFixed(3);
+              });
+              sumP.textContent = parts.join("  |  ");
+              artContainer.appendChild(sumP);
+              // Per-task table
+              var pts = art.per_task_scores || {};
+              var taskKeys = Object.keys(pts).sort();
+              if (taskKeys.length) {
+                var tbl3 = document.createElement("table");
+                tbl3.className = "screening-table";
+                var hdr3 = tbl3.createTHead().insertRow();
+                ["Task","Name","Score","Timing","Amplitude","Reps"].forEach(function(h) {
+                  var th = document.createElement("th"); th.textContent = h; hdr3.appendChild(th);
+                });
+                var tbody3 = tbl3.createTBody();
+                taskKeys.forEach(function(k) {
+                  var t = pts[k];
+                  var tr = tbody3.insertRow();
+                  [k, t.task_name||"-", (t.score||0).toFixed(3), (t.timing||0).toFixed(3),
+                   (t.amplitude||0).toFixed(3), t.n_reps||"-"].forEach(function(v) {
+                    var td = tr.insertCell(); td.textContent = v;
+                  });
+                });
+                artContainer.appendChild(tbl3);
+              }
+            })
+            .catch(function(){});
+        }
+
+        // Download links
+        var dlPaths = profile.download_paths || [];
+        if (dlPaths.length) {
+          _mkSection("Downloads", container);
+          var linksDiv = document.createElement("div");
+          linksDiv.className = "download-links";
+          dlPaths.forEach(function (p) {
+            var a = document.createElement("a");
+            a.href = "/download/" + _toRelPath(p);
+            a.className = "download-link";
+            a.textContent = p.split("/").pop();
+            a.setAttribute("download", "");
+            linksDiv.appendChild(a);
+          });
+          container.appendChild(linksDiv);
+        }
+
+        // Visualization thumbnails
+        var plotPaths = profile.plot_paths || [];
+        var pngs = plotPaths.filter(function (p) { return p.endsWith(".png"); });
+        if (pngs.length) {
+          _mkSection("Visualizations", container);
+          var grid = document.createElement("div");
+          grid.className = "thumb-grid";
+          pngs.forEach(function (p) {
+            var rel = _toRelPath(p);
+            var img = document.createElement("img");
+            img.src = "/visualizations/" + rel;
+            img.alt = p.split("/").pop();
+            img.title = p.split("/").pop();
+            img.addEventListener("click", function () { window.open(img.src, "_blank"); });
+            grid.appendChild(img);
+          });
+          container.appendChild(grid);
+        }
+      }
+
+      function renderResults(summary) {
+        resultsContent.innerHTML = "";
+        var disorderResults = summary.disorder_results;
+
+        if (!disorderResults || !disorderResults.length) {
+          resultsContent.innerHTML = "<p style='color:var(--muted)'>No results available.</p>";
+          resultsSection.style.display = "block";
+          return;
+        }
+
+        // Header row
+        var meta = document.createElement("p");
+        meta.style.cssText = "font-size:.85rem; color:var(--muted); margin-bottom:.75rem;";
+        meta.textContent =
+          "Participant: " + (summary.participant_id || "") +
+          "  |  Profile: " + (summary.profile || "") +
+          "  |  Combined: " + (summary.is_combined ? "yes" : "no");
+        resultsContent.appendChild(meta);
+
+        disorderResults.forEach(function (profile) {
+          var block = document.createElement("div");
+          block.className = "disorder-block";
+
+          var h3 = document.createElement("h3");
+          var dKey = profile.disorder_key ? " [" + profile.disorder_key + "]" : "";
+          h3.textContent = (profile.session_id || "Session") + dKey;
+          block.appendChild(h3);
+
+          if (summary.is_baseline_session) {
+            var refBanner = document.createElement("p");
+            refBanner.style.cssText = "font-size:.83rem;font-style:italic;color:var(--muted);margin-bottom:.5rem;";
+            refBanner.textContent = "Reference / baseline session — recorded as the subject\u2019s normal behaviour. Screening is only performed on test sessions.";
+            block.appendChild(refBanner);
+          }
+
+          _renderDisorderBody(profile, block, summary.is_baseline_session);
+          resultsContent.appendChild(block);
+        });
+
+        resultsSection.style.display = "block";
+      }
+
+      // ---- Status bar updates ----
+      function updateStatusBar() {
+        fetch("/api/model_status")
+          .then(r => r.json())
+          .then(data => {
+            const modelIndicator = document.getElementById("model-indicator");
+            const modelLabel = document.getElementById("model-label");
+            if (data.ready) {
+              modelIndicator.style.background = "#10b981";
+              modelLabel.textContent = "Model: Ready";
+            } else if (data.error) {
+              modelIndicator.style.background = "#ef4444";
+              modelLabel.textContent = "Model: Error (" + data.error.substring(0, 20) + "...)";
+            }
+          })
+          .catch(() => {});
+
+        fetch("/api/normative_status")
+          .then(r => r.json())
+          .then(data => {
+            const normIndicator = document.getElementById("norm-indicator");
+            const normLabel = document.getElementById("norm-label");
+            if (data.has_normative) {
+              normIndicator.style.background = "#10b981";
+              normLabel.textContent = "Normative: Available";
+            }
+          })
+          .catch(() => {});
+
+        fetch("/api/kinematic_profiles_status")
+          .then(r => r.json())
+          .then(data => {
+            const kinIndicator = document.getElementById("kin-indicator");
+            const kinLabel = document.getElementById("kin-label");
+            if (data.has_profiles) {
+              kinIndicator.style.background = "#10b981";
+              kinLabel.textContent = "Kinematic Profiles: Available";
+            }
+          })
+          .catch(() => {});
+      }
+
+      // Initial status check and periodic updates
+      updateStatusBar();
+      setInterval(updateStatusBar, 10000);
+
+      // Build normative button
+      document.getElementById("build-normative-btn").addEventListener("click", function(e) {
+        e.preventDefault();
+        if (!confirm("Build normative reference from all sessions?")) return;
+        this.disabled = true;
+        fetch("/api/build_normative", { method: "POST" })
+          .then(r => r.json())
+          .then(data => {
+            alert(data.success ? "Normative reference built!" : "Error: " + data.error);
+            updateStatusBar();
+            this.disabled = false;
+          })
+          .catch(err => {
+            alert("Failed to build normative reference: " + err.message);
+            this.disabled = false;
+          });
+      });
+
+      // Tab switching
+      const tabBtns = document.querySelectorAll(".tab-btn");
+      const tabContents = ["tab-summary-content", "tab-anomaly-content", "tab-kinematic-content"];
+      tabBtns.forEach((btn, idx) => {
+        btn.addEventListener("click", function() {
+          tabBtns.forEach(b => { b.style.color = "var(--muted)"; b.style.borderBottom = "none"; });
+          btn.style.color = "var(--primary)";
+          btn.style.borderBottom = "2px solid var(--primary)";
+
+          // Show only the content panel matching the clicked button's index
+          tabContents.forEach((id, contentIdx) => {
+            document.getElementById(id).style.display = contentIdx === idx ? "block" : "none";
+          });
+
+          if (idx === 1) renderAnomalyTimeline();
+          if (idx === 2) loadKinematicPdf();
+        });
+      });
+
+      // Anomaly timeline rendering — loads continuous anomaly report via the dedicated API
+      function renderAnomalyTimeline() {
+        const metaEl = document.getElementById("anomaly-metadata");
+        metaEl.textContent = "Loading…";
+        const _jobUrl = _currentJobId ? "/results/" + encodeURIComponent(_currentJobId) : null;
+        if (!_jobUrl) { metaEl.textContent = "No active session."; return; }
+
+        fetch(_jobUrl)
+          .then(r => r.json())
+          .then(summary => {
+            // Collect all session IDs across disorder results
+            const disorderResults = (summary && summary.disorder_results) || [];
+            if (!disorderResults.length) {
+              metaEl.textContent = "No session data available.";
+              return;
+            }
+            // Render the first (or only) session's continuous anomaly report
+            const sessionId = disorderResults[0].session_id;
+            if (!sessionId) {
+              metaEl.textContent = "No session ID in results.";
+              return;
+            }
+            fetch("/api/continuous_anomaly/" + encodeURIComponent(sessionId))
+              .then(r => r.json())
+              .then(report => {
+                if (report.error) {
+                  metaEl.textContent = "Anomaly report: " + report.error;
+                  return;
+                }
+                const canvas = document.getElementById("anomaly-timeline");
+                const ctx = canvas.getContext("2d");
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const periods = report.anomaly_periods || [];
+                const sessionDur = (report.summary && report.summary.session_duration_s) || 60;
+
+                // Background
+                ctx.fillStyle = "#f3f4f6";
+                ctx.fillRect(50, 50, canvas.width - 100, 150);
+                ctx.strokeStyle = "#d1d5db";
+                ctx.strokeRect(50, 50, canvas.width - 100, 150);
+
+                // Anomalous periods
+                periods.forEach(p => {
+                  const start = (p.start_s / sessionDur) * (canvas.width - 100) + 50;
+                  const dur = Math.max(2, (p.duration_s / sessionDur) * (canvas.width - 100));
+                  ctx.fillStyle = "rgba(239, 68, 68, 0.4)";
+                  ctx.fillRect(start, 50, dur, 150);
+                });
+
+                // Axis
+                ctx.strokeStyle = "#374151";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(50, 200); ctx.lineTo(canvas.width - 50, 200);
+                ctx.stroke();
+
+                ctx.font = "12px sans-serif";
+                ctx.fillStyle = "#6b7280";
+                ctx.textAlign = "center";
+                ctx.fillText("0s", 50, 220);
+                ctx.fillText(sessionDur.toFixed(0) + "s", canvas.width - 50, 220);
+                ctx.fillText("Session timeline", canvas.width / 2, 235);
+
+                const summ = report.summary || {};
+                metaEl.textContent =
+                  "Anomalous periods: " + periods.length +
+                  "  |  Total: " + ((summ.total_anomalous_duration_s || 0).toFixed(1)) + "s" +
+                  "  |  Fraction: " + (((summ.anomaly_fraction || 0) * 100).toFixed(1)) + "%";
+              })
+              .catch(() => { metaEl.textContent = "Error loading anomaly report."; });
+          })
+          .catch(() => { metaEl.textContent = "Error loading session results."; });
+      }
+
+      // Load kinematic PDF — session_id lives inside disorder_results, not at top level
+      function loadKinematicPdf() {
+        const _jobUrl = _currentJobId ? "/results/" + encodeURIComponent(_currentJobId) : null;
+        if (!_jobUrl) { return; }
+        fetch(_jobUrl)
+          .then(r => r.json())
+          .then(summary => {
+            var disorderResults = (summary && summary.disorder_results) || [];
+            if (!disorderResults.length) {
+              document.getElementById("kinematic-pdf-container").innerHTML = "<p style='color:var(--muted)'>No session data available.</p>";
+              return;
+            }
+            // For combined sessions show a PDF per disorder; for single show one
+            var container = document.getElementById("kinematic-pdf-container");
+            container.innerHTML = "";
+            disorderResults.forEach(function(dr) {
+              var sessionId = dr.session_id;
+              if (!sessionId) return;
+              var wrap = document.createElement("div");
+              if (disorderResults.length > 1) {
+                var lbl = document.createElement("p");
+                lbl.style.cssText = "font-size:.82rem;font-weight:600;margin-bottom:.3rem;";
+                lbl.textContent = dr.disorder_key ? dr.disorder_key : sessionId;
+                wrap.appendChild(lbl);
+              }
+              var pdfUrl = "/api/kinematic_pdf/" + encodeURIComponent(sessionId);
+              var iframe = document.createElement("iframe");
+              iframe.src = pdfUrl;
+              iframe.style.cssText = "width:100%;height:600px;border:none;border-radius:var(--radius);display:block;margin-bottom:.75rem;";
+              iframe.onerror = function() { iframe.style.display = "none"; };
+              wrap.appendChild(iframe);
+              container.appendChild(wrap);
+            });
+          })
+          .catch(() => {
+            document.getElementById("kinematic-pdf-container").innerHTML = "<p style='color:var(--muted)'>Error loading session data.</p>";
+          });
+      }
+    })();
+  </script>
+</body>
+</html>

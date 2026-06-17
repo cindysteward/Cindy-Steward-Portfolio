@@ -1,0 +1,192 @@
+# Plotting configuration for visualization module.
+# Defines colorblind-safe color palettes (Wong palette), publication-quality
+# typography, axis formatting, plot type settings, and output format options.
+# All settings follow Nature/journal figure conventions (300 dpi, Arial/Helvetica,
+# 8–12 pt text, minimal chrome, high-contrast lines).
+
+general:
+  figure_dpi: 150
+  save_dpi: 300
+  default_figsize: [8.5, 5.5]
+  font_family: "sans-serif"
+  font_size: 9
+  title_size: 11
+  label_size: 10
+  tick_size: 8
+  legend_size: 8
+  line_width: 1.5
+  marker_size: 5
+  spine_linewidth: 0.8
+  axes_grid: true
+  axes_grid_alpha: 0.25
+  axes_grid_linestyle: ":"
+
+  rc:
+    axes.spines.top: false
+    axes.spines.right: false
+    axes.linewidth: 0.8
+    xtick.major.width: 0.8
+    ytick.major.width: 0.8
+    xtick.minor.width: 0.5
+    ytick.minor.width: 0.5
+    xtick.major.size: 4
+    ytick.major.size: 4
+    xtick.direction: "out"
+    ytick.direction: "out"
+    savefig.dpi: 300
+    savefig.format: "png"
+    pdf.fonttype: 42
+    ps.fonttype: 42
+
+colors:
+  primary: "#0072B2"
+  secondary: "#E69F00"
+  tertiary: "#009E73"
+  quaternary: "#CC79A7"
+  success: "#009E73"
+  warning: "#E69F00"
+  error: "#D55E00"
+  neutral: "#999999"
+
+  accent_blue: "#56B4E9"
+  accent_yellow: "#F0E442"
+  accent_coral: "#FF6B6B"
+  accent_mint: "#81ECEC"
+  accent_peach: "#FFEAA7"
+  accent_lavender: "#A29BFE"
+
+  task_groups:
+    A: "#0072B2"
+    B: "#D55E00"
+    C: "#009E73"
+
+  severity:
+    mild: "#F0E442"
+    moderate: "#E69F00"
+    severe: "#D55E00"
+
+  confidence:
+    high: "#009E73"
+    medium: "#E69F00"
+    low: "#D55E00"
+
+  repetitions:
+    - "#0072B2"
+    - "#E69F00"
+    - "#009E73"
+    - "#D55E00"
+    - "#CC79A7"
+    - "#56B4E9"
+
+  left_right:
+    left: "#0072B2"
+    right: "#D55E00"
+
+  baseline:
+    mean: "#999999"
+    std_band: "#CCCCCC"
+
+time_axis:
+  label: "Relative Time (s)"
+  always_start_at_zero: true
+  grid: true
+  grid_alpha: 0.3
+  minor_ticks: true
+
+activation_axis:
+  label: "Activation (baseline-corrected)"
+  range: [-0.5, 1.5]
+  grid: true
+
+asymmetry_axis:
+  label: "Asymmetry Ratio"
+  range: [-1.0, 1.0]
+  zero_line: true
+  zero_line_color: "#757575"
+  zero_line_style: "--"
+
+plot_types:
+  timeseries:
+    show_confidence_band: true
+    confidence_alpha: 0.2
+    show_events: true
+    event_marker: "|"
+    event_marker_size: 20
+
+  repetition_overlay:
+    alpha_per_rep: 0.6
+    show_mean: true
+    mean_line_width: 2.5
+    mean_color: "#212121"
+
+  heatmap:
+    colormap: "RdYlBu_r"
+    center: 0
+    robust: true
+    annot: true
+    fmt: ".2f"
+
+  bar_chart:
+    error_bars: true
+    error_capsize: 3
+    bar_width: 0.7
+
+  boxplot:
+    show_outliers: true
+    outlier_marker: "o"
+    outlier_size: 4
+
+  radar:
+    fill: true
+    fill_alpha: 0.25
+    line_width: 2
+
+confidence_visualization:
+  method: "opacity"
+  high_opacity: 1.0
+  medium_opacity: 0.7
+  low_opacity: 0.4
+  show_confidence_annotation: true
+  annotation_position: "upper_right"
+
+anomaly_markers:
+  detected: "x"
+  detected_color: "#C62828"
+  detected_size: 100
+  threshold_line_style: "--"
+  threshold_line_color: "#757575"
+
+screening_indication_colors:
+  facial_paresis: "#9C27B0"
+  buccofacial_apraxia: "#FF5722"
+  dysarthria: "#F44336"
+  speech_apraxia: "#E91E63"
+  phonological_disorder: "#673AB7"
+
+output:
+  formats: ["png", "pdf"]
+  kinematic_format: "pdf_only"
+  transparent_background: false
+  bbox_inches: "tight"
+  pad_inches: 0.1
+
+subplots:
+  wspace: 0.3
+  hspace: 0.3
+
+legend:
+  location: "best"
+  frameon: true
+  framealpha: 0.9
+  edgecolor: "#BDBDBD"
+
+live_display:
+  panel_width: 300
+  panel_background: [30, 30, 30]
+  text_color: [255, 255, 255]
+  metric_font_scale: 0.6
+  event_font_scale: 0.8
+  event_color: [255, 0, 0]
+  mesh_color: [0, 255, 0]
+  mesh_thickness: 1
+  fps_display: true

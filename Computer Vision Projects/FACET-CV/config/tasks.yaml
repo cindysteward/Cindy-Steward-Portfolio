@@ -1,0 +1,235 @@
+# Task configuration for facial motor and speech behavior quantification pipeline.
+# Defines task groups, individual tasks, and word lists for multi-language support.
+
+task_groups:
+  A:
+    name: "Non-Speech Facial Expression Tasks"
+    description: "Facial expression tasks without speech component"
+    tasks:
+      1:
+        name: "pursing_lips"
+        display_name: "Pursing Lips"
+        primary_blendshapes: ["mouthPucker", "mouthFunnel"]
+        symmetry_pairs: [["mouthLeft", "mouthRight"]]
+        expected_duration_sec: 2.0
+        repetitions: 3
+      2:
+        name: "smiling_broadly"
+        display_name: "Smiling Broadly"
+        primary_blendshapes: ["mouthSmileLeft", "mouthSmileRight"]
+        symmetry_pairs: [["mouthSmileLeft", "mouthSmileRight"], ["cheekSquintLeft", "cheekSquintRight"]]
+        expected_duration_sec: 2.0
+        repetitions: 3
+      3:
+        name: "showing_teeth"
+        display_name: "Showing Teeth"
+        primary_blendshapes: ["mouthSmileLeft", "mouthSmileRight", "jawOpen"]
+        symmetry_pairs: [["mouthSmileLeft", "mouthSmileRight"]]
+        expected_duration_sec: 2.0
+        repetitions: 3
+      4:
+        name: "tongue_protrusion"
+        display_name: "Tongue Protrusion"
+        primary_blendshapes: ["tongueOut"]
+        symmetry_pairs: []
+        expected_duration_sec: 2.0
+        repetitions: 3
+      5:
+        name: "tongue_to_mouth_corner"
+        display_name: "Tongue to Mouth Corner"
+        primary_blendshapes: ["tongueOut"]
+        symmetry_pairs: []
+        expected_duration_sec: 3.0
+        repetitions: 3
+      6:
+        name: "tongue_to_upper_lip"
+        display_name: "Tongue to Upper Lip"
+        primary_blendshapes: ["tongueOut"]
+        symmetry_pairs: []
+        expected_duration_sec: 2.0
+        repetitions: 3
+      7:
+        name: "frowning"
+        display_name: "Frowning"
+        primary_blendshapes: ["browDownLeft", "browDownRight", "mouthFrownLeft", "mouthFrownRight"]
+        symmetry_pairs: [["browDownLeft", "browDownRight"], ["mouthFrownLeft", "mouthFrownRight"]]
+        expected_duration_sec: 2.0
+        repetitions: 3
+      8:
+        name: "puffing_cheeks"
+        display_name: "Puffing Cheeks"
+        primary_blendshapes: ["cheekPuff"]
+        symmetry_pairs: [["cheekSquintLeft", "cheekSquintRight"]]
+        expected_duration_sec: 2.0
+        repetitions: 3
+      9:
+        name: "raising_eyebrows"
+        display_name: "Raising Eyebrows"
+        primary_blendshapes: ["browOuterUpLeft", "browOuterUpRight", "browInnerUp"]
+        symmetry_pairs: [["browOuterUpLeft", "browOuterUpRight"]]
+        expected_duration_sec: 2.0
+        repetitions: 3
+
+  B:
+    name: "Speech Articulation Tasks"
+    description: "Syllable repetition tasks for articulation assessment"
+    tasks:
+      1:
+        name: "pa_pa_pa"
+        display_name: "Pa-Pa-Pa"
+        primary_blendshapes: ["mouthClose", "mouthPucker", "jawOpen"]
+        symmetry_pairs: [["mouthLeft", "mouthRight"]]
+        phoneme_sequence: ["p", "a"]
+        expected_duration_sec: 3.0
+        repetitions: 3
+        target_rate_hz: 3.0
+      2:
+        name: "ta_ta_ta"
+        display_name: "Ta-Ta-Ta"
+        primary_blendshapes: ["mouthClose", "jawOpen", "kin_mouth_opening", "kin_medial_lower_action_y"]
+        symmetry_pairs: [["mouthLeft", "mouthRight"]]
+        phoneme_sequence: ["t", "a"]
+        expected_duration_sec: 3.0
+        repetitions: 3
+        target_rate_hz: 3.0
+      3:
+        name: "ka_ka_ka"
+        display_name: "Ka-Ka-Ka"
+        primary_blendshapes: ["mouthClose", "jawOpen"]
+        symmetry_pairs: [["mouthLeft", "mouthRight"]]
+        phoneme_sequence: ["k", "a"]
+        expected_duration_sec: 3.0
+        repetitions: 3
+        target_rate_hz: 3.0
+      4:
+        name: "pa_ta_ka"
+        display_name: "Pa-Ta-Ka"
+        primary_blendshapes: ["mouthClose", "mouthPucker", "jawOpen", "kin_mouth_opening", "kin_labial_fissure_width"]
+        symmetry_pairs: [["mouthLeft", "mouthRight"]]
+        phoneme_sequence: ["p", "a", "t", "a", "k", "a"]
+        expected_duration_sec: 4.0
+        repetitions: 3
+        target_rate_hz: 2.5
+        is_complex: true
+
+  C:
+    name: "Word Production Tasks"
+    description: "Word production tasks with increasing phonological complexity"
+    primary_blendshapes: ["jawOpen", "mouthClose", "mouthPucker", "mouthSmileLeft", "mouthSmileRight", "mouthStretchLeft", "mouthStretchRight", "kin_mouth_opening", "kin_labial_fissure_width"]
+    symmetry_pairs: [["mouthSmileLeft", "mouthSmileRight"], ["mouthStretchLeft", "mouthStretchRight"]]
+    tasks:
+      1:
+        complexity: 1
+        expected_duration_sec: 2.0
+        repetitions: 2
+      2:
+        complexity: 2
+        expected_duration_sec: 2.0
+        repetitions: 2
+      3:
+        complexity: 3
+        expected_duration_sec: 2.0
+        repetitions: 2
+      4:
+        complexity: 4
+        expected_duration_sec: 2.0
+        repetitions: 2
+      5:
+        complexity: 5
+        expected_duration_sec: 3.0
+        repetitions: 2
+      6:
+        complexity: 6
+        expected_duration_sec: 3.0
+        repetitions: 2
+      7:
+        complexity: 7
+        expected_duration_sec: 3.0
+        repetitions: 2
+      8:
+        complexity: 8
+        expected_duration_sec: 4.0
+        repetitions: 2
+
+word_lists:
+  dutch:
+    - word: "Tak"
+      complexity: 1
+      syllables: 1
+      phoneme_count: 3
+    - word: "Heks"
+      complexity: 2
+      syllables: 1
+      phoneme_count: 4
+    - word: "Knoop"
+      complexity: 3
+      syllables: 1
+      phoneme_count: 4
+    - word: "Plons"
+      complexity: 4
+      syllables: 1
+      phoneme_count: 5
+    - word: "Hamer"
+      complexity: 5
+      syllables: 2
+      phoneme_count: 5
+    - word: "Avontuur"
+      complexity: 6
+      syllables: 3
+      phoneme_count: 7
+    - word: "Spaghetti"
+      complexity: 7
+      syllables: 3
+      phoneme_count: 8
+    - word: "Kleurpotlood"
+      complexity: 8
+      syllables: 3
+      phoneme_count: 11
+
+  english:
+    - word: "Bus"
+      complexity: 1
+      syllables: 1
+      phoneme_count: 3
+    - word: "Chest"
+      complexity: 2
+      syllables: 1
+      phoneme_count: 4
+    - word: "Spoon"
+      complexity: 3
+      syllables: 1
+      phoneme_count: 4
+    - word: "Wrist"
+      complexity: 4
+      syllables: 1
+      phoneme_count: 5
+    - word: "Hammer"
+      complexity: 5
+      syllables: 2
+      phoneme_count: 5
+    - word: "Adventure"
+      complexity: 6
+      syllables: 3
+      phoneme_count: 8
+    - word: "Spaghetti"
+      complexity: 7
+      syllables: 3
+      phoneme_count: 8
+    - word: "Handwriting"
+      complexity: 8
+      syllables: 3
+      phoneme_count: 10
+
+observable_dimensions:
+  - name: "facial_asymmetry"
+    description: "Left-right asymmetry in facial movements"
+    applicable_groups: ["A", "B", "C"]
+  - name: "execution_correctness"
+    description: "Whether task was executed correctly"
+    applicable_groups: ["A", "B", "C"]
+  - name: "temporal_stability"
+    description: "Consistency of timing within and across repetitions"
+    applicable_groups: ["A", "B", "C"]
+  - name: "error_consistency"
+    description: "Pattern consistency of errors across repetitions"
+    applicable_groups: ["A", "B", "C"]

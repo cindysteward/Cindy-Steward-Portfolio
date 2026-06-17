@@ -1,0 +1,396 @@
+version: "1.0.0"
+description: "Clinical screening decision rules for facial motor and speech behaviour; some numbers are placeholders and are refined in /src or should be validated in future work."
+disclaimer: "Non-diagnostic - for methodological validation and quantitative screening support only"
+
+screening_indications:
+  facial_paresis:
+    description: "Persistent left-right asymmetry across non-speech facial tasks"
+    severity_levels: [mild, moderate, severe]
+    
+  buccofacial_apraxia:
+    description: "Incorrect/inconsistent non-speech facial task execution without stable asymmetry — detected via cross-task profile matching (task substitution), low expected-task similarity, and execution errors"
+    severity_levels: [mild, moderate, severe]
+    
+  dysarthria:
+    description: "Consistent articulation impairment and/or uniform slowness across all syllable repetition tasks with pattern preservation"
+    severity_levels: [mild, moderate, severe]
+    
+  speech_apraxia:
+    description: "Selective failure on complex sequencing (pa-ta-ka) while simple syllables remain intact, and/or inconsistent word production errors across repetitions"
+    severity_levels: [mild, moderate, severe]
+    
+  phonological_disorder:
+    description: "Consistent production-level errors in word tasks (Group C) while speech articulation (Group B) remains intact, with stable substitution patterns across repetitions"
+    severity_levels: [mild, moderate, severe]
+
+decision_tree:
+  root:
+    id: "root"
+    type: "branch"
+    description: "Entry point - evaluate all task groups"
+    children:
+      - "evaluate_group_a"
+      - "evaluate_group_b"
+      - "evaluate_group_c"
+
+  evaluate_group_a:
+    id: "evaluate_group_a"
+    type: "branch"
+    description: "Evaluate non-speech facial expression tasks"
+    task_group: "A"
+    children:
+      - "check_asymmetry_persistent"
+      - "check_execution_correctness_a"
+
+  check_asymmetry_persistent:
+    id: "check_asymmetry_persistent"
+    type: "condition"
+    description: "Check for persistent left-right asymmetry"
+    task_group: "A"
+    required_features:
+      - "mean_asymmetry_ratio"
+      - "asymmetry_consistency"
+      - "asymmetry_across_tasks"
+    condition:
+      type: "threshold"
+      feature: "mean_asymmetry_ratio"
+      operator: ">"
+      threshold: 0.15
+      secondary_conditions:
+        - feature: "asymmetry_consistency"
+          operator: ">"
+          threshold: 0.7
+        - feature: "asymmetry_across_tasks"
+          operator: ">="
+          threshold: 0.6
+    true_child: "indicate_facial_paresis"
+    false_child: null
+
+  indicate_facial_paresis:
+    id: "indicate_facial_paresis"
+    type: "indication"
+    indication: "facial_paresis"
+    severity_mapping:
+      mild:
+        feature: "mean_asymmetry_ratio"
+        range: [0.15, 0.25]
+      moderate:
+        feature: "mean_asymmetry_ratio"
+        range: [0.25, 0.40]
+      severe:
+        feature: "mean_asymmetry_ratio"
+        range: [0.40, 1.0]
+    confidence_factors:
+      - "detection_quality"
+      - "sample_size"
+      - "consistency_across_repetitions"
+
+  check_execution_correctness_a:
+    id: "check_execution_correctness_a"
+    type: "condition"
+    description: "Check for incorrect/inconsistent non-speech task execution"
+    task_group: "A"
+    required_features:
+      - "execution_correctness_score"
+      - "error_consistency"
+      - "mean_asymmetry_ratio"
+    condition:
+      type: "compound"
+      operator: "and"
+      conditions:
+        - feature: "execution_correctness_score"
+          operator: "<"
+          threshold: 0.7
+        - feature: "mean_asymmetry_ratio"
+          operator: "<"
+          threshold: 0.15
+    true_child: "check_error_consistency_a"
+    false_child: null
+
+  check_error_consistency_a:
+    id: "check_error_consistency_a"
+    type: "condition"
+    description: "Differentiate between consistent and inconsistent errors"
+    task_group: "A"
+    required_features:
+      - "error_consistency"
+    condition:
+      type: "threshold"
+      feature: "error_consistency"
+      operator: "<"
+      threshold: 0.6
+    true_child: "indicate_buccofacial_apraxia"
+    false_child: "indicate_buccofacial_apraxia"
+
+  indicate_buccofacial_apraxia:
+    id: "indicate_buccofacial_apraxia"
+    type: "indication"
+    indication: "buccofacial_apraxia"
+    severity_mapping:
+      mild:
+        feature: "execution_correctness_score"
+        range: [0.5, 0.7]
+        inverse: true
+      moderate:
+        feature: "execution_correctness_score"
+        range: [0.3, 0.5]
+        inverse: true
+      severe:
+        feature: "execution_correctness_score"
+        range: [0.0, 0.3]
+        inverse: true
+    confidence_factors:
+      - "detection_quality"
+      - "sample_size"
+
+  evaluate_group_b:
+    id: "evaluate_group_b"
+    type: "branch"
+    description: "Evaluate speech articulation tasks"
+    task_group: "B"
+    children:
+      - "check_articulation_all_syllables"
+      - "check_articulation_complex_only"
+
+  check_articulation_all_syllables:
+    id: "check_articulation_all_syllables"
+    type: "condition"
+    description: "Check for consistent articulation impairment across all syllable tasks"
+    task_group: "B"
+    required_features:
+      - "articulation_score_pa"
+      - "articulation_score_ta"
+      - "articulation_score_ka"
+      - "articulation_score_pataka"
+      - "articulation_impairment_consistency"
+    condition:
+      type: "compound"
+      operator: "and"
+      conditions:
+        - feature: "articulation_impairment_consistency"
+          operator: ">"
+          threshold: 0.7
+        - feature: "mean_articulation_score"
+          operator: "<"
+          threshold: 0.6
+    true_child: "indicate_dysarthria"
+    false_child: null
+
+  indicate_dysarthria:
+    id: "indicate_dysarthria"
+    type: "indication"
+    indication: "dysarthria"
+    severity_mapping:
+      mild:
+        feature: "mean_articulation_score"
+        range: [0.4, 0.6]
+        inverse: true
+      moderate:
+        feature: "mean_articulation_score"
+        range: [0.2, 0.4]
+        inverse: true
+      severe:
+        feature: "mean_articulation_score"
+        range: [0.0, 0.2]
+        inverse: true
+    confidence_factors:
+      - "detection_quality"
+      - "temporal_consistency"
+
+  check_articulation_complex_only:
+    id: "check_articulation_complex_only"
+    type: "condition"
+    description: "Check for articulation impairment primarily in pa-ta-ka"
+    task_group: "B"
+    required_features:
+      - "articulation_score_pa"
+      - "articulation_score_ta"
+      - "articulation_score_ka"
+      - "articulation_score_pataka"
+    condition:
+      type: "compound"
+      operator: "and"
+      conditions:
+        - feature: "articulation_score_pataka"
+          operator: "<"
+          threshold: 0.6
+        - feature: "simple_syllable_mean"
+          operator: ">"
+          threshold: 0.7
+    true_child: "indicate_speech_apraxia_articulation"
+    false_child: null
+
+  indicate_speech_apraxia_articulation:
+    id: "indicate_speech_apraxia_articulation"
+    type: "indication"
+    indication: "speech_apraxia"
+    source: "articulation_pattern"
+    severity_mapping:
+      mild:
+        feature: "pataka_simple_difference"
+        range: [0.1, 0.2]
+      moderate:
+        feature: "pataka_simple_difference"
+        range: [0.2, 0.35]
+      severe:
+        feature: "pataka_simple_difference"
+        range: [0.35, 1.0]
+    confidence_factors:
+      - "detection_quality"
+      - "repetition_consistency"
+
+  evaluate_group_c:
+    id: "evaluate_group_c"
+    type: "branch"
+    description: "Evaluate word production tasks using facial movement quality as proxy"
+    task_group: "C"
+    children:
+      - "check_word_production_decline_consistent"
+      - "check_word_production_decline_inconsistent"
+
+  check_word_production_decline_consistent:
+    id: "check_word_production_decline_consistent"
+    type: "condition"
+    description: "Check for consistent decline in word production quality from baseline"
+    task_group: "C"
+    required_features:
+      - "word_production_quality"
+      - "cross_word_consistency"
+      - "complexity_gradient"
+    condition:
+      type: "compound"
+      operator: "and"
+      conditions:
+        - feature: "delta_word_production_quality"
+          operator: "<"
+          threshold: -0.10
+        - feature: "cross_word_consistency"
+          operator: ">"
+          threshold: 0.5
+        - feature: "delta_complexity_gradient"
+          operator: ">"
+          threshold: -0.20
+    true_child: "indicate_phonological_disorder"
+    false_child: null
+
+  indicate_phonological_disorder:
+    id: "indicate_phonological_disorder"
+    type: "indication"
+    indication: "phonological_disorder"
+    severity_mapping:
+      mild:
+        feature: "delta_word_production_quality"
+        range: [-0.20, -0.10]
+      moderate:
+        feature: "delta_word_production_quality"
+        range: [-0.30, -0.20]
+      severe:
+        feature: "delta_word_production_quality"
+        range: [-1.0, -0.30]
+    confidence_factors:
+      - "cross_word_consistency"
+      - "n_words_scored"
+
+  check_word_production_decline_inconsistent:
+    id: "check_word_production_decline_inconsistent"
+    type: "condition"
+    description: "Check for inconsistent or complexity-dependent word production decline"
+    task_group: "C"
+    required_features:
+      - "word_production_quality"
+      - "complexity_gradient"
+      - "cross_word_consistency"
+    condition:
+      type: "compound"
+      operator: "and"
+      conditions:
+        - feature: "delta_word_production_quality"
+          operator: "<"
+          threshold: -0.10
+        - type: "or"
+          conditions:
+            - feature: "delta_complexity_gradient"
+              operator: "<"
+              threshold: -0.20
+            - feature: "delta_cross_word_consistency"
+              operator: "<"
+              threshold: -0.15
+    true_child: "indicate_speech_apraxia_word"
+    false_child: null
+
+  indicate_speech_apraxia_word:
+    id: "indicate_speech_apraxia_word"
+    type: "indication"
+    indication: "speech_apraxia"
+    source: "word_production_pattern"
+    severity_mapping:
+      mild:
+        feature: "delta_word_production_quality"
+        range: [-0.20, -0.10]
+      moderate:
+        feature: "delta_word_production_quality"
+        range: [-0.30, -0.20]
+      severe:
+        feature: "delta_word_production_quality"
+        range: [-1.0, -0.30]
+    confidence_factors:
+      - "complexity_gradient"
+      - "cross_word_consistency"
+
+thresholds:
+  asymmetry:
+    mild: 0.43
+    moderate: 0.55
+    severe: 0.70
+  execution_correctness:
+    good: 0.85
+    acceptable: 0.70
+    poor: 0.50
+  task_profile_similarity:
+    good: 0.70
+    acceptable: 0.50
+    poor: 0.40
+  duration_ratio:
+    slow: 1.15
+    very_slow: 1.40
+  repetition_variability:
+    normal: 0.15
+    elevated: 0.25
+    high: 0.40
+  articulation:
+    good: 0.80
+    acceptable: 0.60
+    poor: 0.40
+  articulation_deviation:
+    mild: 0.38
+    moderate: 0.48
+    severe: 0.58
+    apraxia_selective: 0.13
+  word_production:
+    good: 0.80
+    acceptable: 0.60
+    poor: 0.40
+  word_production_deviation:
+    mild: 0.32
+    moderate: 0.42
+    severe: 0.55
+  consistency:
+    high: 0.80
+    moderate: 0.60
+    low: 0.40
+
+confidence_weights:
+  data_quality: 0.35
+  consistency: 0.35
+  model_rule_agreement: 0.30
+
+anomaly:
+  composite_threshold: 0.45
+
+anomaly_detection:
+  isolation_forest:
+    n_estimators: 100
+    contamination: 0.1
+    max_samples: "auto"
+    random_state: 42
+  deviation_threshold_std: 2.0

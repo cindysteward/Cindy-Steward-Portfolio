@@ -1,0 +1,3670 @@
+<!DOCTYPE html>
+<!--
+  study-prompter.html
+  Clinical Speech & Facial Monitoring Study Prompter
+  
+  Guides participants through a practice round, neutral baseline, and up to three
+  task blocks (A: facial expressions, B: speech, C: words) per clinical profile.
+  
+  Profiles: NORMAL, PROFILE 1-5 (Facial Paresis, Buccofacial Apraxia, Dysarthria,
+  Speech Apraxia, Phonological Disorder), MIXED A-C, and COMBINED (all disorders,
+  minimum time, with per-task profile labels for post-session video annotation).
+  
+  Features: anime.js SVG face animation, Web Speech API TTS with phonetic
+  normalisation, webcam/screen recording (microphone capture with audio processing
+  disabled so speech output is preserved), timestamped CSV export with
+  profile_label column, keyboard shortcuts, configurable task duration.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Study Prompter: Clinical Speech &amp; Facial Monitoring</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { width: 100%; height: 100%; }
+body {
+  min-height: 100%; overflow-y: auto; align-items: flex-start;
+  padding: 24px 16px; box-sizing: border-box;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #0d1520;
+  color: #e8ecf1;
+  display: flex;
+  justify-content: center;
+}
+
+#setup-screen {
+  width: 100%;
+  max-width: 860px;
+  max-height: none;
+  background: #15202d;
+  border-radius: 18px;
+  padding: 40px 44px;
+  box-shadow: 0 16px 56px rgba(0,0,0,.5);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 32px;
+  row-gap: 0;
+  align-items: start;
+}
+#setup-screen h1 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 4px; grid-column: 1 / -1; }
+#setup-screen .subtitle { font-size: 13px; color: #6a7d90; margin-bottom: 30px; grid-column: 1 / -1; }
+.setup-col-left { grid-column: 1; }
+.setup-col-right { grid-column: 2; }
+.setup-full { grid-column: 1 / -1; }
+@media (max-width: 700px) {
+  #setup-screen { grid-template-columns: 1fr; max-width: 520px; padding: 28px 20px; }
+  .setup-col-left, .setup-col-right, .setup-full { grid-column: 1 / -1 !important; }
+}
+.field { margin-bottom: 22px; }
+.field label {
+  display: block; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .9px;
+  color: #7a8da0; margin-bottom: 7px;
+}
+.field input[type="text"], .field select {
+  width: 100%; padding: 11px 14px; background: #0d1520;
+  border: 1px solid #263545; border-radius: 8px;
+  color: #e0e8f0; font-size: 15px; outline: none; transition: border-color .2s;
+}
+.field input[type="text"]:focus, .field select:focus { border-color: #3B82F6; }
+.field input::placeholder { color: #3d4f60; }
+.field-row { display: flex; gap: 14px; }
+.field-row .field { flex: 1; }
+
+.toggle-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.toggle-row span { font-size: 14px; color: #b0bcc8; }
+.toggle { position: relative; width: 42px; height: 22px; flex-shrink: 0; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider {
+  position: absolute; inset: 0; background: #263545; border-radius: 11px;
+  cursor: pointer; transition: background .25s;
+}
+.toggle .slider::after {
+  content: ''; position: absolute; width: 16px; height: 16px;
+  left: 3px; top: 3px; background: #6a7d90; border-radius: 50%;
+  transition: transform .25s, background .25s;
+}
+.toggle input:checked + .slider { background: #2563eb; }
+.toggle input:checked + .slider::after { transform: translateX(20px); background: #fff; }
+.cam-panel { margin: 4px 0 10px 54px; padding: 10px 12px; background: #111d2c; border-radius: 8px; border: 1px solid #1e3048; }
+.btn-scan { background: #1e3c5a; border: 1px solid #2a5580; color: #90c8f0; border-radius: 6px; padding: 5px 12px; font-size: 12px; cursor: pointer; margin-bottom: 8px; display: inline-block; }
+.btn-scan:hover { background: #1a4a70; }
+.cam-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px solid #1a2c3e; flex-wrap: wrap; }
+.cam-item:last-of-type { border-bottom: none; }
+.cam-check-label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #b0bcc8; cursor: pointer; flex: 1; }
+.cam-check-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: #2563eb; cursor: pointer; flex-shrink: 0; }
+.btn-test-cam { background: #1a2c3e; border: 1px solid #2a4060; color: #7090a8; border-radius: 5px; padding: 3px 8px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.btn-test-cam:hover { background: #1e3a50; }
+.cam-preview { display: block; width: 160px; height: 90px; border-radius: 4px; margin-top: 4px; object-fit: cover; border: 1px solid #2a4060; }
+.mic-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.mic-row label { font-size: 12px; color: #6a8090; white-space: nowrap; }
+.mic-row select { background: #111d2c; border: 1px solid #1e3048; border-radius: 5px; color: #b0bcc8; font-size: 12px; padding: 3px 6px; flex: 1; min-width: 0; }
+#end-downloads-list { list-style: none; padding: 0; margin: 6px 0 0 0; font-size: 12px; color: #90a8ba; max-height: 150px; overflow-y: auto; text-align: left; }
+#end-downloads-list li { padding: 2px 0; }
+#end-downloads-list li::before { content: '\2193 '; color: #34d399; }
+
+#btn-begin {
+  width: 100%; padding: 13px; margin-top: 6px;
+  background: #2563eb; border: none; border-radius: 10px;
+  color: #fff; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: opacity .2s, background .2s;
+}
+#btn-begin:disabled { background: #1a2535; color: #3d4f60; cursor: not-allowed; }
+#btn-begin:not(:disabled):hover { background: #1d4fd8; }
+
+#task-screen {
+  display: none; position: fixed; inset: 0;
+  background: #0d1520; flex-direction: column;
+}
+
+.top-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 24px; background: #0f1a28;
+  border-bottom: 1px solid #1a2838; z-index: 10; flex-shrink: 0;
+}
+.top-bar-left { display: flex; gap: 20px; align-items: center; font-size: 13px; color: #506878; }
+.top-bar-left .lv { color: #90a8ba; font-weight: 600; }
+.top-bar-right { display: flex; align-items: center; gap: 18px; }
+.session-timer { font-size: 15px; font-weight: 600; color: #d0dae4; font-variant-numeric: tabular-nums; }
+.rec-indicator { font-size: 10px; color: #a03030; opacity: .65; user-select: none; }
+
+.center-area {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 20px 20px 16px; position: relative; overflow: hidden;
+}
+
+#face-container {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; position: relative;
+}
+#face-container.hidden { display: none; }
+
+.face-glow { position: absolute; top: 50%; left: 50%; width: 370px; height: 410px; transform: translate(-50%, -52%); border-radius: 50%; pointer-events: none; opacity: 0; }
+#brow-l, #brow-r { transform-box: fill-box; transform-origin: center center; }
+
+.instruction-text {
+  margin-top: 20px; font-size: 26px; font-weight: 600;
+  color: #e0e8f0; text-align: center; max-width: 600px; line-height: 1.45;
+}
+.seq-counter { margin-top: 8px; font-size: 12px; color: #405060; letter-spacing: .3px; }
+
+#status-cue {
+  position: absolute; top: 5%; left: 50%;
+  transform: translateX(-50%);
+  font-size: 42px; font-weight: 900; padding: 14px 44px;
+  border-radius: 16px; pointer-events: none;
+  z-index: 25; transition: opacity .25s ease-out;
+  opacity: 0; letter-spacing: 1px; text-align: center;
+  min-width: 220px;
+}
+#status-cue.ready    { opacity: 1; color: #EF4444; background: rgba(239,68,68,.12); border: 2px solid rgba(239,68,68,.3); }
+#status-cue.go       { opacity: 1; color: #22C55E; background: rgba(34,197,94,.10);  border: 2px solid rgba(34,197,94,.3); }
+#status-cue.hide     { opacity: 0; border: 2px solid transparent; }
+
+#text-card {
+  display: none; flex-direction: column; align-items: center;
+  justify-content: center; position: relative;
+}
+#text-card.visible { display: flex; }
+.word-card {
+  background: #131e2c; border-radius: 16px;
+  padding: 40px 60px; text-align: center;
+  box-shadow: 0 4px 28px rgba(0,0,0,.3); min-width: 320px;
+  transition: box-shadow .4s ease;
+}
+.word-card.ready { box-shadow: 0 4px 28px rgba(245,158,11,.12), 0 0 0 1px rgba(245,158,11,.15); }
+.word-card.active { box-shadow: 0 4px 28px rgba(34,197,94,.1), 0 0 0 1px rgba(34,197,94,.12); }
+.word-card .big-word { font-size: 64px; font-weight: 700; color: #fff; line-height: 1.2; margin-bottom: 10px; }
+.word-card .say-label { font-size: 13px; font-weight: 600; color: #7a9ab0; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+.word-card .say-label.cue-large { font-size: 26px; font-weight: 700; color: #c8daea; text-transform: none; letter-spacing: 0; margin-bottom: 0; line-height: 1.4; }
+.rep-counter { margin-top: 16px; font-size: 13px; color: #405060; font-weight: 500; }
+
+.bottom-area {
+  padding: 12px 24px 16px; background: #0f1a28;
+  border-top: 1px solid #1a2838; flex-shrink: 0;
+}
+.progress-bar-track {
+  width: 100%; height: 4px; background: #182430;
+  border-radius: 2px; overflow: hidden; margin-bottom: 10px;
+}
+.progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, #22C55E, #4ADE80);
+  border-radius: 2px; width: 100%;
+  transition: width 0.1s linear;
+}
+.progress-bar-fill.ready { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+.bottom-row { display: flex; justify-content: space-between; align-items: center; }
+.section-dots { display: flex; gap: 12px; font-size: 11px; color: #405060; flex-wrap: wrap; }
+.section-dots .dg { display: flex; align-items: center; gap: 3px; }
+.section-dots .dl { margin-right: 3px; font-weight: 700; color: #506878; }
+.section-dots .dt {
+  width: 6px; height: 6px; border-radius: 50%; background: #182430;
+  transition: background .3s;
+}
+.section-dots .dt.done { background: #2563eb; }
+.section-dots .dt.now { background: #60a5fa; box-shadow: 0 0 4px #60a5fa; }
+
+.researcher-controls { display: flex; gap: 8px; }
+.researcher-controls button {
+  padding: 6px 14px; border: 1px solid #1e3040; background: transparent;
+  color: #506878; border-radius: 6px; font-size: 12px;
+  cursor: pointer; transition: background .2s, color .2s;
+}
+.researcher-controls button:hover { background: #162030; color: #90a8ba; }
+.researcher-controls .btn-end:hover { background: #2a1515; border-color: #3a2020; color: #ff6b6b; }
+
+#section-break {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,16,26,.95); backdrop-filter: blur(10px);
+  z-index: 50; flex-direction: column; align-items: center; justify-content: center;
+}
+#section-break.visible { display: flex; }
+#section-break h2 { font-size: 24px; font-weight: 700; color: #fff; margin-bottom: 10px; }
+#section-break p { font-size: 20px; color: #ffffff; margin-bottom: 28px; text-align: center; max-width: 400px; line-height: 1.8; }
+#btn-continue {
+  position: relative; overflow: hidden;
+  padding: 13px 44px; background: #1a2c4f; border: none; border-radius: 10px;
+  color: #fff; font-size: 15px; font-weight: 600;
+  opacity: 0.5; pointer-events: none;
+  cursor: pointer; transition: opacity .2s;
+}
+#btn-continue:hover { background: #1a2c4f; }
+#btn-continue .btn-continue-fill { background: #2563eb; }
+
+.btn-continue-fill {
+  position: absolute; top: 0; left: 0; height: 100%; width: 0%;
+  background: #2563eb; transition: none; z-index: 0;
+}
+#btn-continue span { position: relative; z-index: 1; }
+
+
+
+#rest-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(10,16,26,.92); z-index: 40;
+  flex-direction: column; align-items: center; justify-content: center;
+}
+#rest-overlay.visible { display: flex; }
+#rest-overlay .rest-text { font-size: 20px; color: #6a8090; font-weight: 600; }
+
+#end-screen {
+  display: none; position: fixed; inset: 0; background: #0d1520;
+  flex-direction: column; align-items: center; justify-content: center; z-index: 60;
+}
+#end-screen.visible { display: flex; }
+.end-card {
+  background: #15202d; border-radius: 18px; padding: 48px 52px;
+  text-align: center; box-shadow: 0 16px 56px rgba(0,0,0,.5); max-width: 480px;
+}
+#end-screen h2 { font-size: 22px; font-weight: 700; color: #fff; margin-bottom: 16px; }
+.end-detail { font-size: 14px; color: #6a8090; margin-bottom: 6px; }
+.end-note { font-size: 12px; color: #405060; margin-top: 18px; line-height: 1.5; }
+#btn-new-session {
+  margin-top: 26px; padding: 13px 44px; background: #2563eb;
+  border: none; border-radius: 10px; color: #fff;
+  font-size: 15px; font-weight: 600; cursor: pointer; transition: background .2s;
+}
+#btn-new-session:hover { background: #1d4fd8; }
+
+.toast {
+  position: fixed; top: 18px; right: 18px;
+  background: #2a1a1a; border: 1px solid #3a2525; color: #ff9a9a;
+  padding: 10px 18px; border-radius: 8px; font-size: 13px;
+  z-index: 100; opacity: 0; transform: translateY(-8px);
+  transition: opacity .3s, transform .3s;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+#end-files-panel {
+  display: none;
+  margin: 10px 0 0 0;
+  text-align: left;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #1a2838;
+  flex-wrap: wrap;
+}
+.file-row:last-child { border-bottom: none; }
+.file-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: #7a9ab0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-status {
+  font-size: 11px;
+  color: #34d399;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.file-status.pending { color: #506878; }
+.file-status.error { color: #f87171; }
+.btn-file-action {
+  padding: 3px 9px;
+  border: 1px solid #2a4060;
+  background: #1a2c3e;
+  color: #7090a8;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-file-action:hover { background: #1e3a50; color: #90b8d0; }
+.btn-save-to { border-color: #1e3a50; }
+#storage-warning {
+  display: none;
+  font-size: 11px;
+  color: #f87171;
+  margin-top: 8px;
+  line-height: 1.5;
+  text-align: left;
+}
+</style>
+</head>
+<body>
+
+<div id="setup-screen">
+  <h1>Study Prompter</h1>
+  <p class="subtitle">Clinical Speech &amp; Facial Monitoring</p>
+
+  <div class="setup-col-left">
+    <div class="field">
+      <label>Participant ID</label>
+      <input type="text" id="input-pid" placeholder="e.g. P007" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="field">
+      <label>Task Blocks</label>
+      <select id="select-blocks">
+        <option value="all">All blocks (A + B + C)</option>
+        <option value="a">Block A only: Facial expressions</option>
+        <option value="b">Block B only: Speech repetitions</option>
+        <option value="c">Block C only: Word repetitions</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Task Duration (seconds)</label>
+      <input type="number" id="input-task-dur" min="1" max="15" value="3" step="1" style="width:100px;">
+      <span style="font-size:12px;color:#405060;margin-left:8px;">(baseline is always 10 s)</span>
+    </div>
+
+    <div class="field">
+      <label>Camera Frame Rate</label>
+      <select id="select-framerate" style="width:160px;">
+        <option value="30">30 fps (default)</option>
+        <option value="60">60 fps</option>
+      </select>
+      <span style="font-size:11px;color:#405060;margin-left:8px;">
+        (60 fps requires a compatible camera and sufficient USB bandwidth)
+      </span>
+    </div>
+
+    <div class="field">
+      <label>Sequence Repetitions (A &amp; C)</label>
+      <input type="number" id="input-seq-reps" min="1" max="10" placeholder="Default (3)" step="1" style="width:130px;">
+      <span style="font-size:12px;color:#405060;margin-left:8px;">(B always stays 5 reps)</span>
+    </div>
+  </div>
+
+  <div class="setup-col-right">
+    <div class="field-row">
+      <div class="field">
+        <label>Profile</label>
+        <select id="select-profile">
+          <option value="NORMAL">NORMAL: Baseline</option>
+          <option value="PROFILE_1">PROFILE 1: Facial Paresis (Left-sided)</option>
+          <option value="PROFILE_2">PROFILE 2: Buccofacial Apraxia</option>
+          <option value="PROFILE_3">PROFILE 3: Dysarthria</option>
+          <option value="PROFILE_4">PROFILE 4: Speech Apraxia</option>
+          <option value="PROFILE_5">PROFILE 5: Phonological Disorder</option>
+          <option value="MIXED_A">MIXED A: Speech Apraxia + Mild Facial Asymmetry</option>
+          <option value="MIXED_B">MIXED B: Dysarthria + Minor Buccofacial Noise</option>
+          <option value="MIXED_C">MIXED C: Facial Paresis + Phonological Disorder</option>
+          <option value="COMBINED">COMBINED: All Disorders (Minimum Time)</option>
+        </select>
+      </div>
+      <div class="field" style="max-width:170px;">
+        <label>Language</label>
+        <select id="select-lang">
+          <option value="nl">Nederlands</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top: 12px;">
+      <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="toggle-skip-practice" style="margin:0;">Skip practice section</label>
+    </div>
+  </div>
+
+  <div class="field setup-full">
+    <label>Voice</label>
+    <select id="select-voice">
+      <option value="auto">Auto (Google neural preferred)</option>
+    </select>
+    <div style="margin-top:6px;">
+      <button type="button" id="btn-preview-voice" style="padding:6px 14px;background:#1a2535;border:1px solid #263545;border-radius:6px;color:#90a8ba;font-size:12px;cursor:pointer;">&#9654; Preview voice</button>
+    </div>
+  </div>
+
+  <div class="field setup-full">
+    <label>Recording Options</label>
+    <div class="toggle-row" style="margin-bottom:6px;">
+      <label class="toggle"><input type="checkbox" id="toggle-cam"><span class="slider"></span></label>
+      <span>Enable camera recording</span>
+    </div>
+    <div id="cam-panel" class="cam-panel" style="display:none;">
+      <button type="button" id="btn-scan-cams" class="btn-scan">Scan for cameras</button>
+      <span style="font-size:11px;color:#6a8090;display:block;margin-top:4px;">Click <em>Grant Access</em> next to each camera you want to record.</span>
+      <div id="cam-list"></div>
+      <div class="mic-row" id="mic-row" style="display:none;">
+        <label for="mic-select">Microphone:</label>
+        <select id="mic-select"></select>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <label class="toggle"><input type="checkbox" id="toggle-screen"><span class="slider"></span></label>
+      <span>Enable screen recording</span>
+    </div>
+  </div>
+
+  <button id="btn-begin" class="setup-full" disabled>Begin Session</button>
+</div>
+
+<div id="task-screen">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <span id="top-profile"><span class="lv"></span></span>
+      <span id="top-section"><span class="lv"></span></span>
+      <span id="top-task"><span class="lv"></span></span>
+    </div>
+    <div class="top-bar-right">
+      <span class="session-timer" id="session-timer">00:00</span>
+      <span class="rec-indicator" id="rec-cam" style="display:none;">&#x2B24; CAM1</span>
+      <span class="rec-indicator" id="rec-cam2" style="display:none;">&#x2B24; CAM2</span>
+      <span class="rec-indicator" id="rec-cam3" style="display:none;">&#x2B24; CAM3</span>
+      <span class="rec-indicator" id="rec-scr" style="display:none;">&#x2B24; SCR</span>
+    </div>
+  </div>
+
+  <div class="center-area">
+    <div id="status-cue" class="hide"></div>
+
+    <div id="face-container" style="position:relative;">
+      <div class="face-glow" id="face-glow"></div>
+      <svg id="face-svg" viewBox="0 0 400 440" width="320" height="352">
+        <defs>
+          <radialGradient id="blush-grad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#D4856A" stop-opacity=".3"/>
+            <stop offset="100%" stop-color="#D4856A" stop-opacity="0"/>
+          </radialGradient>
+          <clipPath id="clip-eye-l">
+            <path d="M 114 209 Q 140 190 166 209 Q 140 228 114 209 Z"/>
+          </clipPath>
+          <clipPath id="clip-eye-r">
+            <path d="M 234 209 Q 260 190 286 209 Q 260 228 234 209 Z"/>
+          </clipPath>
+        </defs>
+
+        <path d="M 200 66 C 256 66 318 112 318 196 C 318 256 300 316 272 348 C 256 366 238 376 222 380 C 216 382 210 383 226 384 L 226 416 L 174 416 L 174 384 C 190 383 184 382 178 380 C 162 376 144 366 128 348 C 100 316 82 256 82 196 C 82 112 144 66 200 66 Z" fill="#C49A6C" stroke="#A07848" stroke-width="2"/>
+        <ellipse cx="82" cy="218" rx="11" ry="19" fill="#BF9362" stroke="#A07848" stroke-width="1"/>
+        <ellipse cx="318" cy="218" rx="11" ry="19" fill="#BF9362" stroke="#A07848" stroke-width="1"/>
+        <ellipse id="sclera-l" cx="140" cy="209" rx="28" ry="18" fill="white" stroke="#8B7355" stroke-width=".8" clip-path="url(#clip-eye-l)"/>
+        <circle id="iris-l" cx="140" cy="209" r="12" fill="#5C3D2E" clip-path="url(#clip-eye-l)"/>
+        <circle id="pupil-l" cx="140" cy="209" r="5.5" fill="#1a1a1a" clip-path="url(#clip-eye-l)"/>
+        <circle cx="136" cy="206" r="1.5" fill="white" opacity=".6" clip-path="url(#clip-eye-l)"/>
+        <ellipse id="sclera-r" cx="260" cy="209" rx="28" ry="18" fill="white" stroke="#8B7355" stroke-width=".8" clip-path="url(#clip-eye-r)"/>
+        <circle id="iris-r" cx="260" cy="209" r="12" fill="#5C3D2E" clip-path="url(#clip-eye-r)"/>
+        <circle id="pupil-r" cx="260" cy="209" r="5.5" fill="#1a1a1a" clip-path="url(#clip-eye-r)"/>
+        <circle cx="256" cy="206" r="1.5" fill="white" opacity=".6" clip-path="url(#clip-eye-r)"/>
+        <path id="lid-upper-l" d="M 114 209 Q 127 191 140 190 Q 153 191 166 209 Q 153 202 140 201 Q 127 202 114 209 Z" fill="#C49A6C" stroke="#A07848" stroke-width="0.7"/>
+        <path id="lid-upper-r" d="M 234 209 Q 247 191 260 190 Q 273 191 286 209 Q 273 202 260 201 Q 247 202 234 209 Z" fill="#C49A6C" stroke="#A07848" stroke-width="0.7"/>
+        <g id="brow-l">
+          <path d="M 109 183 C 124 179 138 177 154 176 C 165 176 172 177 170 182 C 163 181 149 181 136 182 C 123 183 114 184 109 186 Z" fill="#3D2818"/>
+        </g>
+        <g id="brow-r">
+          <path d="M 291 183 C 276 179 262 177 246 176 C 235 176 228 177 230 182 C 237 181 251 181 264 182 C 277 183 286 184 291 186 Z" fill="#3D2818"/>
+        </g>
+
+        <ellipse cx="200" cy="260" rx="14" ry="10" fill="#B8864A" opacity=".12"/>
+        <path d="M 200 218 Q 200 245 200 258" fill="none" stroke="#B08558" stroke-width="0.8" opacity=".18"/>
+        <path d="M 188 262 Q 200 266 212 262" fill="none" stroke="#A07848" stroke-width="1.2" opacity=".38"/>
+        <ellipse cx="190" cy="262" rx="6" ry="4" fill="#B08050" opacity=".15"/>
+        <ellipse cx="210" cy="262" rx="6" ry="4" fill="#B08050" opacity=".15"/>
+
+        <circle cx="108" cy="268" r="36" fill="url(#blush-grad)" opacity="0.28"/>
+        <circle cx="292" cy="268" r="36" fill="url(#blush-grad)" opacity="0.28"/>
+        <circle id="blush-l" cx="108" cy="268" r="20" fill="url(#blush-grad)" opacity="0"/>
+        <circle id="blush-r" cx="292" cy="268" r="20" fill="url(#blush-grad)" opacity="0"/>
+        <path d="M 195 267 Q 193 278 192 285" fill="none" stroke="#A07848" stroke-width="0.7" opacity="0.22"/>
+        <path d="M 205 267 Q 207 278 208 285" fill="none" stroke="#A07848" stroke-width="0.7" opacity="0.22"/>
+        <ellipse cx="200" cy="368" rx="38" ry="12" fill="#B08048" opacity=".07"/>
+
+        <ellipse id="cheek-l" cx="136" cy="272" rx="5" ry="5" fill="#D4AA7C" stroke="#B89060" stroke-width="1" opacity="0"/>
+        <ellipse id="cheek-r" cx="264" cy="272" rx="5" ry="5" fill="#D4AA7C" stroke="#B89060" stroke-width="1" opacity="0"/>
+
+        <line id="furrow-l" x1="192" y1="190" x2="194" y2="200" stroke="#8B6E4C" stroke-width="1.2" stroke-linecap="round" opacity="0"/>
+        <line id="furrow-r" x1="208" y1="190" x2="206" y2="200" stroke="#8B6E4C" stroke-width="1.2" stroke-linecap="round" opacity="0"/>
+
+        <g id="m-neutral" opacity="1">
+          <path d="M 170 296 Q 178 290 188 288 Q 194 286 200 288 Q 206 286 212 288 Q 222 290 230 296" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1"/>
+          <path d="M 170 296 Q 184 306 200 308 Q 216 306 230 296" fill="#C08878" stroke="#8B5E4C" stroke-width=".8"/>
+          <path d="M 174 296 Q 187 294 200 294 Q 213 294 226 296" fill="none" stroke="#8B5E4C" stroke-width=".5" opacity=".3"/>
+        </g>
+
+              <g id="m-smile-closed" opacity="0">
+      <!-- Upper lip: corners at (143,287), outer arch rises to y=273 (14px). Inner edge at y=291. -->
+      <path d="M 143 287 Q 200 273 257 287 Q 230 291 200 292 Q 170 291 143 287 Z"
+        fill="#B87A6B" stroke="#8B5E4C" stroke-width="1"/>
+      <!-- Lower lip: same corners, outer curve drops to y=305 (18px). Inner edge at y=291. -->
+      <path d="M 143 287 Q 170 305 200 307 Q 230 305 257 287 Q 230 291 200 292 Q 170 291 143 287 Z"
+        fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+      <!-- Lip crease stays at y=291-292 — lips are closed. -->
+      <path d="M 143 287 Q 200 292 257 287"
+        fill="none" stroke="#8B5E4C" stroke-width="0.8" opacity="0.5"/>
+    </g>
+
+        <g id="m-smile" opacity="0">
+          <path d="M 140 290 Q 200 297 260 290 Q 257 322 200 325 Q 143 322 140 290 Z" fill="#1A0808"/>
+          <path d="M 143 290 Q 200 297 257 290 L 255 297 Q 200 303 145 297 Z" fill="#F0EBE5"/>
+          <line x1="145" y1="297" x2="255" y2="297" stroke="#C8C0B8" stroke-width="1"/>
+          <path d="M 146 298 Q 200 304 254 298 L 252 305 Q 200 307 148 305 Z" fill="#EDE8E2"/>
+          <path d="M 140 290 Q 165 288 200 287 Q 235 288 260 290 Q 235 292 200 293 Q 165 292 140 290 Z" fill="#C08878" stroke="#8B5040" stroke-width="0.8"/>
+          <path d="M 140 290 Q 143 322 200 325 Q 257 322 260 290 Q 245 310 200 312 Q 155 310 140 290 Z" fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+        </g>
+
+        <g id="m-teeth" opacity="0">
+          <ellipse cx="200" cy="298" rx="34" ry="20" fill="#3A1E1E"/>
+          <rect x="172" y="286" width="56" height="11" rx="1.5" fill="white"/>
+          <line x1="182" y1="286" x2="182" y2="297" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="191" y1="286" x2="191" y2="297" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="200" y1="286" x2="200" y2="297" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="209" y1="286" x2="209" y2="297" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="218" y1="286" x2="218" y2="297" stroke="#e0e0e0" stroke-width=".4"/>
+          <rect x="176" y="297" width="48" height="10" rx="1.5" fill="white"/>
+          <line x1="188" y1="297" x2="188" y2="307" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="196" y1="297" x2="196" y2="307" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="204" y1="297" x2="204" y2="307" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="212" y1="297" x2="212" y2="307" stroke="#e0e0e0" stroke-width=".4"/>
+          <line x1="172" y1="297" x2="228" y2="297" stroke="#bbb" stroke-width=".5"/>
+          <path d="M 166 288 Q 174 280 186 278 Q 194 276 200 278 Q 206 276 214 278 Q 226 280 234 288" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1"/>
+          <path d="M 170 310 Q 182 324 200 326 Q 218 324 230 310" fill="#C08878" stroke="#8B5E4C" stroke-width=".8"/>
+        </g>
+
+            <g id="m-asym-teeth" opacity="0">
+              <path d="M 170 296 Q 206 290 246 283 Q 244 311 208 314 Q 183 312 170 296 Z"
+                fill="#1A0808"/>
+              <path d="M 174 295 Q 210 290 244 284 L 242 293 Q 208 300 176 301 Z"
+                fill="#F0EBE5"/>
+              <line x1="190" y1="293" x2="190" y2="300" stroke="#ddd" stroke-width=".4"/>
+              <line x1="204" y1="291" x2="204" y2="298" stroke="#ddd" stroke-width=".4"/>
+              <line x1="218" y1="288" x2="218" y2="295" stroke="#ddd" stroke-width=".4"/>
+              <line x1="232" y1="286" x2="232" y2="293" stroke="#ddd" stroke-width=".4"/>
+              <line x1="182" y1="301" x2="242" y2="293" stroke="#ccc" stroke-width=".5"/>
+              <path d="M 182 301 Q 216 300 242 293 L 240 301 Q 208 307 183 308 Z"
+                fill="#EDE8E2"/>
+              <line x1="196" y1="301" x2="196" y2="307" stroke="#ddd" stroke-width=".4"/>
+              <line x1="210" y1="300" x2="210" y2="306" stroke="#ddd" stroke-width=".4"/>
+              <line x1="224" y1="298" x2="224" y2="304" stroke="#ddd" stroke-width=".4"/>
+              <path d="M 168 296 Q 208 270 252 282 Q 226 285 196 292 Q 178 294 168 296 Z"
+                fill="#C08878" stroke="#8B5040" stroke-width="0.8"/>
+              <path d="M 168 296 Q 186 318 210 320 Q 238 314 252 282 Q 240 296 208 304 Q 185 307 168 296 Z"
+                fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+            </g>
+
+        <g id="m-frown" opacity="0">
+          <path d="M 160 312 Q 180 298 200 296 Q 220 298 240 312 Q 228 305 200 303 Q 172 305 160 312 Z"
+                fill="#B87A6B" stroke="#8B5E4C" stroke-width="1"/>
+          <path d="M 160 312 Q 180 298 200 296 Q 220 298 240 312"
+                fill="none" stroke="#5A2818" stroke-width="3"/>
+          <path d="M 160 310 Q 180 318 200 320 Q 220 318 240 310"
+                fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+        </g>
+
+        <g id="m-surprised" opacity="0">
+          <ellipse cx="200" cy="308" rx="20" ry="20" fill="#2A1010" stroke="#7B4A3A" stroke-width="1"/>
+          <path d="M 180 296 Q 186 285 200 283 Q 214 285 220 296" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1.2"/>
+          <path d="M 180 318 Q 190 332 200 334 Q 210 332 220 318" fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+        </g>
+
+        <g id="m-purse" opacity="0">
+          <ellipse cx="200" cy="300" rx="11" ry="9" fill="#4A2020"/>
+          <path d="M 186 296 Q 192 286 200 284 Q 208 286 214 296 Q 208 298 200 299 Q 192 298 186 296 Z" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1"/>
+          <path d="M 186 304 Q 192 314 200 316 Q 208 314 214 304 Q 208 302 200 301 Q 192 302 186 304 Z" fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+          <line x1="183" y1="297" x2="177" y2="295" stroke="#9B6E5E" stroke-width="0.7" opacity="0.35"/>
+          <line x1="183" y1="303" x2="177" y2="305" stroke="#9B6E5E" stroke-width="0.7" opacity="0.35"/>
+          <line x1="217" y1="297" x2="223" y2="295" stroke="#9B6E5E" stroke-width="0.7" opacity="0.35"/>
+          <line x1="217" y1="303" x2="223" y2="305" stroke="#9B6E5E" stroke-width="0.7" opacity="0.35"/>
+        </g>
+
+        <g id="m-open" opacity="0">
+          <ellipse cx="200" cy="304" rx="30" ry="18" fill="#3A1E1E" stroke="#7B4A3A" stroke-width="1"/>
+          <path d="M 170 298 Q 174 286 185 282 Q 194 280 200 284 Q 206 280 215 282 Q 226 286 230 298" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1"/>
+          <path d="M 170 310 Q 180 326 200 328 Q 220 326 230 310" fill="#C08878" stroke="#8B5E4C" stroke-width=".8"/>
+        </g>
+
+        <g id="m-puff" opacity="0">
+          <path d="M 176 296 Q 188 292 200 292 Q 212 292 224 296" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1.2"/>
+          <path d="M 176 296 Q 188 302 200 303 Q 212 302 224 296" fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+          <line x1="176" y1="296" x2="224" y2="296" stroke="#8B5E4C" stroke-width=".6" opacity=".4"/>
+        </g>
+
+        <g id="m-asym-puff" opacity="0">
+          <path d="M 180 294 Q 192 291 204 291 Q 216 291 224 294"
+                fill="#B87A6B" stroke="#8B5E4C" stroke-width="1.2"/>
+          <path d="M 180 294 Q 192 299 204 299 Q 216 299 224 294"
+                fill="#C08878" stroke="#8B5E4C" stroke-width="1"/>
+        </g>
+
+          <g id="m-asym" opacity="0">
+          <path d="M 170 296 Q 218 272 252 282 Q 220 285 170 296 Z"
+            fill="#B87A6B" stroke="#8B5040" stroke-width="0.9"/>
+          <path d="M 170 296 Q 220 285 252 282 Q 196 304 170 296 Z"
+            fill="#C08878" stroke="#8B5E4C" stroke-width="0.9"/>
+          <path d="M 170 296 Q 220 285 252 282"
+            fill="none" stroke="#8B5E4C" stroke-width="0.7" opacity="0.55"/>
+        </g>
+
+        <g id="m-asym-purse" opacity="0">
+          <ellipse cx="194" cy="300" rx="9" ry="8" fill="#4A2020"/>
+          <path d="M 182 296 Q 186 284 194 282 Q 202 284 208 296" fill="#B87A6B" stroke="#8B5E4C" stroke-width="1.2"/>
+          <path d="M 182 304 Q 186 314 194 316 Q 202 314 208 304" fill="#C08878" stroke="#8B5E4C" stroke-width="1.2"/>
+          <path d="M 208 298 Q 211 296 214 296" fill="none" stroke="#B87A6B" stroke-width="1"/>
+          <path d="M 208 302 Q 211 304 214 302" fill="none" stroke="#C08878" stroke-width=".8"/>
+          <line x1="182" y1="296" x2="176" y2="294" stroke="#9B6E5E" stroke-width=".7" opacity=".3"/>
+          <line x1="182" y1="304" x2="176" y2="306" stroke="#9B6E5E" stroke-width=".7" opacity=".3"/>
+          <line x1="192" y1="282" x2="190" y2="277" stroke="#9B6E5E" stroke-width=".5" opacity=".22"/>
+          <line x1="192" y1="316" x2="190" y2="321" stroke="#9B6E5E" stroke-width=".5" opacity=".22"/>
+          <line x1="208" y1="296" x2="213" y2="293" stroke="#9B6E5E" stroke-width=".5" opacity=".18"/>
+          <line x1="208" y1="304" x2="213" y2="307" stroke="#9B6E5E" stroke-width=".5" opacity=".18"/>
+        </g>
+
+        <g id="m-asym-smile-closed" opacity="0">
+          <path d="M 170 296 Q 212 282 250 285 Q 212 291 170 296 Z"
+            fill="#B87A6B" stroke="#8B5E4C" stroke-width="0.8"/>
+          <path d="M 170 296 Q 192 307 218 306 Q 240 298 250 285 Q 212 291 170 296 Z"
+            fill="#C08878" stroke="#8B5E4C" stroke-width="0.8"/>
+          <path d="M 170 296 Q 212 291 250 285"
+            fill="none" stroke="#8B5E4C" stroke-width="0.7" opacity="0.6"/>
+        </g>
+
+        <path id="nasolabial-l" d="M 166 264 Q 150 274 143 287" fill="none" stroke="#A07848" stroke-width="1.2" opacity="0"/>
+        <path id="nasolabial-r" d="M 234 264 Q 250 274 257 287" fill="none" stroke="#A07848" stroke-width="1.2" opacity="0"/>
+        <circle id="dimple-l" cx="143" cy="288" r="4" fill="none" stroke="#A07848" stroke-width="1" opacity="0"/>
+        <circle id="dimple-r" cx="257" cy="288" r="4" fill="none" stroke="#A07848" stroke-width="1" opacity="0"/>
+
+        <ellipse id="tongue" cx="200" cy="308" rx="16" ry="10" fill="#D06868" stroke="#B05050" stroke-width="1" opacity="0"/>
+      </svg>
+      <div class="instruction-text" id="instruction-text"></div>
+      <div id="profile-label-badge" style="margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#3B82F6;opacity:0;transition:opacity .3s;"></div>
+      <div class="seq-counter" id="seq-counter"></div>
+    </div>
+
+    <div id="text-card">
+      <div class="word-card" id="word-card">
+        <div class="say-label" id="sub-instruction"></div>
+        <div class="big-word" id="big-word"></div>
+      </div>
+      <div id="profile-label-badge-text" style="margin-top:6px;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#3B82F6;opacity:0;transition:opacity .3s;"></div>
+      <div class="rep-counter" id="rep-counter"></div>
+    </div>
+  </div>
+
+  <div class="bottom-area">
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+    <div class="bottom-row">
+      <div class="section-dots" id="section-dots"></div>
+      <div>
+        <div class="researcher-controls">
+          <button id="btn-pause">&#x23F8; Pause</button>
+          <button id="btn-skip">&#x23ED; Skip</button>
+          <button id="btn-end" class="btn-end">&#x2715; End Session</button>
+        </div>
+        <div style="font-size:10px;color:#2a3e50;margin-top:5px;text-align:right;">Space: pause &middot; &rarr; skip &middot; Esc: end</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="section-break">
+  <h2 id="break-title"></h2>
+  <p id="break-desc"></p>
+  <button id="btn-continue"><div class="btn-continue-fill"></div><span>Continue</span></button>
+</div>
+
+<div id="rest-overlay">
+  <div class="rest-text" id="rest-text"></div>
+</div>
+
+<div id="end-screen">
+  <div class="end-card">
+    <h2 id="end-title">Session Complete</h2>
+    <p class="end-detail" id="end-pid"></p>
+    <p class="end-detail" id="end-profile"></p>
+    <p class="end-detail" id="end-duration"></p>
+    <p class="end-detail" id="end-cam-status" style="display:none;"></p>
+    <p class="end-detail" id="end-screen-status" style="display:none;"></p>
+    <div id="end-files-panel"></div>
+    <div id="storage-warning"></div>
+    <p class="end-note" id="end-note"></p>
+    <button id="btn-new-session">Start New Session</button>
+  </div>
+</div>
+
+<script>
+const CONFIG = {
+  baselineDuration: 10,
+  sectionARestPause: 3000,
+  sectionBPause: 1200,
+  sectionCPause: 1200,
+  readyCueDuration: 1200,
+  goCueDuration: 500,
+  audioDelayCompensationMs: 100,
+  ttsRate: 0.82,
+  ttsRateSlow: 0.62,
+  ttsRateFast: 1.5,
+  ttsPitch: 1.06,
+  ttsVolume: 0.88,
+  animDuration: 650,
+  animEasing: 'easeInOutCubic',
+  sectionARepeats: 3,
+  sectionBRepeats: 3,
+  sectionBPerTaskReps: 5,
+  sectionCRepeats: 3,
+  taskDuration: 3,
+};
+
+var _sessionFiles = [];
+
+const LANG = {
+  en: {
+    sectionA: 'Section A: Facial',
+    sectionB: 'Section B: Speech',
+    sectionC: 'Section C: Words',
+    sequence: 'Sequence',
+    of: 'of',
+    task: 'Task',
+    repetition: 'Repetition',
+    getReady: 'Get ready\u2026',
+    go: 'Go!',
+    rest: 'Rest: prepare for next sequence',
+    sessionBeginning: 'Session beginning.',
+    practiceTitle: 'Practice Round',
+    practiceDesc: 'Before we begin, let\'s do a short practice so you know what to expect.<br><br>You will see instructions on the screen. Execute these after you have seen the <strong>"Go!"</strong> signal. You will try one facial expression, one speech task, and one word, just to get familiar.<br><br>These do not count.',
+    practiceSpeak: 'Practice round. Let\'s try a few tasks together first.',
+    practiceFacialInstruction: 'Smile',
+    practiceSpeechInstruction: 'Say: pa-pa-pa',
+    practiceWordInstruction: 'Say: Hello',
+    practiceWordDisplay: 'Hello',
+    practiceDone: 'Practice complete. The real session begins now.',
+    baselineTitle: 'Neutral Baseline',
+    baselineDesc: 'We will start with a short rest measurement.<br><br>Please look straight ahead with a relaxed and neutral face.<br><br>Wait for the <strong>"Go!"</strong> signal, then hold still until the timer finishes.',
+    baselineInstruction: 'Please look straight ahead with a relaxed and neutral expression.',
+    baselineSpeak: 'Please look straight ahead with a relaxed and neutral expression.',
+    sectionATitle: 'Part A: Facial Expressions',
+    sectionADesc: 'The face on screen will show an expression to copy.<br><br>Watch the face, then wait for the <strong>"Go!"</strong> signal. Make that expression and <strong>hold it</strong> until the timer finishes.',
+    sectionBTitle: 'Part B: Speech',
+    sectionBDesc: 'You will <strong>hear</strong> a syllable sequence spoken aloud.<br><br>After the <strong>"Go!"</strong> signal, repeat the sequence <strong>5 times as fast and clearly as you can</strong>.',
+    sectionCTitle: 'Part C: Words',
+    sectionCDesc: 'A word will be <strong>spoken aloud</strong>. The word will <strong>not</strong> appear on screen.<br><br>Listen carefully, then after the <strong>"Go!"</strong> signal, repeat the word you heard as clearly as possible.',
+    repeatWordCue: 'Repeat the word you hear',
+    repeatXTimes: '5× Repeat',
+    sectionASpeakIntro: 'Section A: Facial expression tasks.',
+    sectionBSpeakIntro: 'Section B: Speech tasks.',
+    sectionCSpeakIntro: 'Section C: Word tasks.',
+    sequenceBegin: 'begin',
+    sessionComplete: 'Session complete. Thank you.',
+    endTitle: 'Session Complete',
+    endNote: 'Please collect any external camera footage separately.',
+    camSaved: 'Camera recording(s) saved automatically.',
+    screenSaved: 'Screen recording saved automatically.',
+    newSession: 'Start New Session',
+    continueBtn: 'Continue',
+    say: 'Say',
+    saySlow: 'Say slowly and heavily',
+    repeat: 'Repeat',
+    repeatSlow: 'Slowly repeat',
+  },
+  nl: {
+    sectionA: 'Sectie A: Gezicht',
+    sectionB: 'Sectie B: Spraak',
+    sectionC: 'Sectie C: Woorden',
+    sequence: 'Reeks',
+    of: 'van',
+    task: 'Taak',
+    repetition: 'Herhaling',
+    getReady: 'Maak u klaar\u2026',
+    go: 'Start!',
+    rest: 'Rust: bereid u voor op de volgende reeks',
+    sessionBeginning: 'Sessie begint.',
+    practiceTitle: 'Oefenronde',
+    practiceDesc: 'Voordat we beginnen, doen we een korte oefening zodat u weet wat u kunt verwachten.<br><br>U krijgt instructies te zien op het scherm. Voer deze uit nadat u het <strong>"Start!"</strong> signaal heeft gezien. U probeert één gezichtsuitdrukking, één spraaktaak en één woord, alleen om te oefenen.<br><br>Dit telt niet mee.',
+    practiceSpeak: 'Oefenronde. Laten we eerst een paar taken samen proberen.',
+    practiceFacialInstruction: 'Glimlachen',
+    practiceSpeechInstruction: 'Zeg: pa-pa-pa',
+    practiceWordInstruction: 'Zeg: Hallo',
+    practiceWordDisplay: 'Hallo',
+    practiceDone: 'Oefening klaar. De echte sessie begint nu.',
+    baselineTitle: 'Neutrale Basislijn',
+    baselineDesc: 'We beginnen met een korte rustmeting.<br><br>Kijk recht vooruit met een ontspannen en neutraal gezicht.<br><br>Wacht op het <strong>"Start!"</strong> signaal en houd die houding vast tot de timer klaar is.',
+    baselineInstruction: 'Kijk alstublieft recht vooruit met een ontspannen, neutrale gezichtsuitdrukking.',
+    baselineSpeak: 'Kijk alstublieft recht vooruit met een ontspannen, neutrale gezichtsuitdrukking.',
+    sectionATitle: 'Deel A: Gezichtsuitdrukkingen',
+    sectionADesc: 'Het gezicht op het scherm toont een uitdrukking die u na moet doen.<br><br>Kijk goed naar het gezicht en wacht op het <strong>"Start!"</strong> signaal. Maak dan die uitdrukking en <strong>houd deze vast</strong> tot de timer klaar is.',
+    sectionBTitle: 'Deel B: Spraak',
+    sectionBDesc: 'U <strong>hoort</strong> een lettergreepreeks die wordt uitgesproken.<br><br>Na het <strong>"Start!"</strong> signaal herhaalt u de reeks <strong>5 keer zo snel en duidelijk mogelijk achter elkaar</strong>.',
+    sectionCTitle: 'Deel C: Woorden',
+    sectionCDesc: 'Er wordt een woord <strong>uitgesproken</strong>. U ziet het woord misschien <strong>niet</strong> op het scherm.<br><br>Luister goed, en herhaal na het <strong>"Start!"</strong> signaal het gehoorde woord zo duidelijk mogelijk.',
+    repeatWordCue: 'Herhaal het woord dat u hoort',
+    repeatXTimes: '5× Herhaal',
+    sectionASpeakIntro: 'Sectie A: Gezichtsuitdrukkingen.',
+    sectionBSpeakIntro: 'Sectie B: Spraaktaken.',
+    sectionCSpeakIntro: 'Sectie C: Woordtaken.',
+    sequenceBegin: 'begin',
+    sessionComplete: 'Sessie voltooid. Dank u.',
+    endTitle: 'Sessie Voltooid',
+    endNote: 'Verzamel eventuele externe camerabeelden apart.',
+    camSaved: 'Cameraopname(s) automatisch opgeslagen.',
+    screenSaved: 'Schermopname automatisch opgeslagen.',
+    newSession: 'Nieuwe Sessie',
+    continueBtn: 'Doorgaan',
+    say: 'Zeg',
+    saySlow: 'Zeg langzaam en zwaar',
+    repeat: 'Herhaal',
+    repeatSlow: 'Herhaal langzaam',
+  }
+};
+
+const SECTION_A_DEFS = {
+  NORMAL: {
+    en: [
+      { instruction: 'Purse your lips', expression: 'purse' },
+      { instruction: 'Smile', expression: 'smile_closed' },
+      { instruction: 'Smile wide, show your teeth', expression: 'smile_gentle' },
+      { instruction: 'Stick out your tongue', expression: 'tongue_out' },
+      { instruction: 'Tongue: left corner, then right corner', expression: 'tongue_lr' },
+      { instruction: 'Touch upper lip with tongue', expression: 'tongue_up' },
+      { instruction: 'Frown', expression: 'frown' },
+      { instruction: 'Puff your cheeks', expression: 'puff' },
+      { instruction: 'Raise eyebrows: surprised', expression: 'surprised' },
+    ],
+    nl: [
+      { instruction: 'Tuit uw lippen', expression: 'purse' },
+      { instruction: 'Glimlachen', expression: 'smile_closed' },
+      { instruction: 'Lach breed, laat uw tanden zien', expression: 'smile_gentle' },
+      { instruction: 'Steek uw tong uit', expression: 'tongue_out' },
+      { instruction: 'Tong: linkerhoek, dan rechterhoek', expression: 'tongue_lr' },
+      { instruction: 'Raak bovenlip aan met tong', expression: 'tongue_up' },
+      { instruction: 'Frons', expression: 'frown' },
+      { instruction: 'Blaas uw wangen op', expression: 'puff' },
+      { instruction: 'Wenkbrauwen omhoog alsof u verrast bent', expression: 'surprised' },
+    ],
+  },
+  PARESIS: {
+    en: [
+      { instruction: 'Purse lips, press right side more', expression: 'asymmetric_purse' },
+      { instruction: 'Lift right mouth corner slightly, closed lips', expression: 'asymmetric_right_smile_closed' },
+      { instruction: 'Teeth: right side higher', expression: 'asymmetric_right_teeth' },
+      { instruction: 'Tongue out, tilt left', expression: 'tongue_left' },
+      { instruction: 'Tongue to right corner more', expression: 'tongue_right' },
+      { instruction: 'Tongue to right upper lip', expression: 'tongue_up' },
+      { instruction: 'Frown: right brow more', expression: 'asymmetric_right_frown' },
+      { instruction: 'Puff right cheek more, left stays relaxed', expression: 'asymmetric_right_puff' },
+      { instruction: 'Right brow higher than left', expression: 'asymmetric_right_brow' },
+    ],
+    nl: [
+      { instruction: 'Tuit lippen naar links toe', expression: 'asymmetric_purse' },
+      { instruction: 'Til rechterhoek licht op, lippen gesloten', expression: 'asymmetric_right_smile_closed' },
+      { instruction: 'Tanden: rechterkant hoger', expression: 'asymmetric_right_teeth' },
+      { instruction: 'Tong uit, kantel naar links', expression: 'tongue_left' },
+      { instruction: 'Tong naar rechterhoek meer', expression: 'tongue_right' },
+      { instruction: 'Tong naar rechter bovenlip', expression: 'tongue_up' },
+      { instruction: 'Frons: rechter wenkbrauw meer', expression: 'asymmetric_right_frown' },
+      { instruction: 'Blaas rechterwang meer op, links ontspannen', expression: 'asymmetric_right_puff' },
+      { instruction: 'Rechter wenkbrauw hoger', expression: 'asymmetric_right_brow' },
+    ],
+  },
+  BUCCOFACIAL: {
+    en: [
+      { instruction: 'Smile', expression: 'smile_closed' },
+      { instruction: 'Purse your lips', expression: 'purse' },
+      { instruction: 'Puff your cheeks', expression: 'puff' },
+      { instruction: 'Tongue toward chin', expression: 'tongue_out' },
+      { instruction: 'Touch upper lip with tongue', expression: 'tongue_up' },
+      { instruction: 'Tongue: left corner, then right corner', expression: 'tongue_lr' },
+      { instruction: 'Raise eyebrows as if surprised', expression: 'surprised' },
+      { instruction: 'Smile wide, show your teeth', expression: 'smile_gentle' },
+      { instruction: 'Frown', expression: 'frown' },
+    ],
+    nl: [
+      { instruction: 'Glimlachen', expression: 'smile_closed' },
+      { instruction: 'Tuit uw lippen', expression: 'purse' },
+      { instruction: 'Blaas uw wangen op', expression: 'puff' },
+      { instruction: 'Tong naar kin', expression: 'tongue_out' },
+      { instruction: 'Raak bovenlip aan met tong', expression: 'tongue_up' },
+      { instruction: 'Tong: linker- dan rechterhoek', expression: 'tongue_lr' },
+      { instruction: 'Wenkbrauwen omhoog: verrast', expression: 'surprised' },
+      { instruction: 'Lach breed, laat uw tanden zien', expression: 'smile_gentle' },
+      { instruction: 'Frons', expression: 'frown' },
+    ],
+  },
+  MIXED_A: {
+    en: [
+      { instruction: 'Purse lips left, slightly to the left', expression: 'asymmetric_purse' },
+      { instruction: 'Smile: mostly right side, lips closed', expression: 'asymmetric_right_smile_closed' },
+      { instruction: 'Smile wide, show your teeth', expression: 'happy' },
+      { instruction: 'Stick out your tongue', expression: 'tongue_out' },
+      { instruction: 'Tongue: left corner, then right corner', expression: 'tongue_lr' },
+      { instruction: 'Touch upper lip with tongue', expression: 'tongue_up' },
+      { instruction: 'Frown', expression: 'frown' },
+      { instruction: 'Puff your cheeks', expression: 'puff' },
+      { instruction: 'Raise eyebrows: surprised', expression: 'surprised' },
+    ],
+    nl: [
+      { instruction: 'Tuit lippen naar links toe', expression: 'asymmetric_purse' },
+      { instruction: 'Lach: vooral rechterkant, lippen gesloten', expression: 'asymmetric_right_smile_closed' },
+      { instruction: 'Lach breed, laat uw tanden zien', expression: 'happy' },
+      { instruction: 'Steek uw tong uit', expression: 'tongue_out' },
+      { instruction: 'Tong: linker- dan rechterhoek', expression: 'tongue_lr' },
+      { instruction: 'Raak bovenlip aan met tong', expression: 'tongue_up' },
+      { instruction: 'Frons', expression: 'frown' },
+      { instruction: 'Blaas uw wangen op', expression: 'puff' },
+      { instruction: 'Wenkbrauwen omhoog: verrast', expression: 'surprised' },
+    ],
+  },
+  MIXED_B: {
+    en: [
+      { instruction: 'Smile', expression: 'smile_closed' },
+      { instruction: 'Purse your lips', expression: 'purse' },
+      { instruction: 'Smile wide, show your teeth', expression: 'smile_gentle' },
+      { instruction: 'Stick out your tongue', expression: 'tongue_out' },
+      { instruction: 'Tongue: left corner, then right corner', expression: 'tongue_lr' },
+      { instruction: 'Touch upper lip with tongue', expression: 'tongue_up' },
+      { instruction: 'Frown', expression: 'frown' },
+      { instruction: 'Puff your cheeks', expression: 'puff' },
+      { instruction: 'Raise eyebrows: surprised', expression: 'surprised' },
+    ],
+    nl: [
+      { instruction: 'Glimlachen', expression: 'smile_closed' },
+      { instruction: 'Tuit uw lippen', expression: 'purse' },
+      { instruction: 'Lach breed, laat uw tanden zien', expression: 'smile_gentle' },
+      { instruction: 'Steek uw tong uit', expression: 'tongue_out' },
+      { instruction: 'Tong: linker- dan rechterhoek', expression: 'tongue_lr' },
+      { instruction: 'Raak bovenlip aan met tong', expression: 'tongue_up' },
+      { instruction: 'Frons', expression: 'frown' },
+      { instruction: 'Blaas uw wangen op', expression: 'puff' },
+      { instruction: 'Wenkbrauwen omhoog: verrast', expression: 'surprised' },
+    ],
+  },
+};
+
+const SECTION_B_DEFS = {
+  NORMAL: {
+    en: [
+      { instruction: 'Say 5 times as fast as possible: pa-pa-pa' },
+      { instruction: 'Say 5 times as fast as possible: ta-ta-ta' },
+      { instruction: 'Say 5 times as fast as possible: ka-ka-ka' },
+      { instruction: 'Say 5 times as fast as possible: pa-ta-ka' },
+    ],
+    nl: [
+      { instruction: 'Zeg 5 keer zo snel mogelijk: pa-pa-pa' },
+      { instruction: 'Zeg 5 keer zo snel mogelijk: ta-ta-ta' },
+      { instruction: 'Zeg 5 keer zo snel mogelijk: ka-ka-ka' },
+      { instruction: 'Zeg 5 keer zo snel mogelijk: pa-ta-ka' },
+    ],
+  },
+  DYSARTHRIA: {
+    en: [
+      { instruction: 'Say slowly and heavily as many times as you can: pa-pa-pa' },
+      { instruction: 'Say slowly and heavily as many times as you can: ta-ta-ta' },
+      { instruction: 'Say slowly and heavily as many times as you can: ka-ka-ka' },
+      { instruction: 'Say slowly and heavily as many times as you can: pa-ta-ka' },
+    ],
+    nl: [
+      { instruction: 'Zeg langzaam en zwaar zo vaak mogelijk: pa-pa-pa' },
+      { instruction: 'Zeg langzaam en zwaar zo vaak mogelijk: ta-ta-ta' },
+      { instruction: 'Zeg langzaam en zwaar zo vaak mogelijk: ka-ka-ka' },
+      { instruction: 'Zeg langzaam en zwaar zo vaak mogelijk: pa-ta-ka' },
+    ],
+  },
+  APRAXIA: {
+    en: [
+      { instruction: 'Say 5 times as fast as possible: pa-pa-pa' },
+      { instruction: 'Say 5 times as fast as possible: ta-ta-ta' },
+      { instruction: 'Say 5 times as fast as possible: ka-ka-ka' },
+      { variants: { en: ['Say 5 times as fast as possible: ka-pa-ta','Say 5 times as fast as possible: ta-pa-ka','Say 5 times as fast as possible: pa-ka-ta','Say 5 times as fast as possible: ka-pa-ta','Say 5 times as fast as possible: ta-pa-ka'], nl: ['Zeg 5 keer zo snel mogelijk: ka-pa-ta','Zeg 5 keer zo snel mogelijk: ta-pa-ka','Zeg 5 keer zo snel mogelijk: pa-ka-ta','Zeg 5 keer zo snel mogelijk: ka-pa-ta','Zeg 5 keer zo snel mogelijk: ta-pa-ka'] } },
+    ],
+    nl: [
+      { instruction: 'Zeg 5 keer zo snel mogelijk: pa-pa-pa' },
+      { instruction: 'Zeg 5 keer zo snel mogelijk: ta-ta-ta' },
+      { instruction: 'Zeg 5 keer zo snel mogelijk: ka-ka-ka' },
+      { variants: { en: ['Say 5 times as fast as possible: ka-pa-ta','Say 5 times as fast as possible: ta-pa-ka','Say 5 times as fast as possible: pa-ka-ta','Say 5 times as fast as possible: ka-pa-ta','Say 5 times as fast as possible: ta-pa-ka'], nl: ['Zeg 5 keer zo snel mogelijk: ka-pa-ta','Zeg 5 keer zo snel mogelijk: ta-pa-ka','Zeg 5 keer zo snel mogelijk: pa-ka-ta','Zeg 5 keer zo snel mogelijk: ka-pa-ta','Zeg 5 keer zo snel mogelijk: ta-pa-ka'] } },
+    ],
+  },
+};
+
+const SECTION_C_DEFS = {
+  NORMAL: {
+    en: { words: ['Bus','Chest','Spoon','Wrist','Hammer','Adventure','Spaghetti','Handwriting'], type: 'same' },
+    nl: { words: ['Tak','Heks','Knoop','Plons','Hamer','Avontuur','Spaghetti','Kleurpotlood'], type: 'same' },
+  },
+  DYSARTHRIA: {
+    en: { words: ['Bus','Chest','Spoon','Wrist','Hammer','Adventure','Spaghetti','Handwriting'], type: 'slow' },
+    nl: { words: ['Tak','Heks','Knoop','Plons','Hamer','Avontuur','Spaghetti','Kleurpotlood'], type: 'slow' },
+  },
+  APRAXIA: {
+    en: {
+      words: [['Bus','Pus','Bus'],['Chest','Cheft','Chest'],['Spoon','Spoom','Spoon'],['Wrist','Wrift','Wrist'],['Hammer','Hammel','Hammer'],['Adventure','Advencher','Adventure'],['Spaghetti','Spaghenti','Spaghetti'],['Handwriting','Handriting','Handwriting']],
+      type: 'variant',
+    },
+    nl: {
+      words: [['Tak','Pak','Tak'],['Heks','Hels','Heks'],['Knoop','Knoop','Snoop'],['Plons','Blons','Plons'],['Hamer','Hamel','Hamer'],['Avontuur','Avontul','Avontuur'],['Spaghetti','Spaghenti','Spaghetti'],['Kleurpotlood','Kleupotlood','Kleurpotlood']],
+      type: 'variant',
+    },
+  },
+  PHONO: {
+    en: { words: ['But','Chet','Spoon','Writ','Hammer','Adventure','Taghetti','Handwriting'], type: 'same' },
+    nl: { words: ['Tat','Hets','Tnoop','Plons','Hamer','Avontuur','Spaghetti','Tleurpotlood'], type: 'same' },
+  },
+};
+
+const PROFILES = {
+  NORMAL:    { name: { en: 'NORMAL: Baseline', nl: 'NORMAAL: Basislijn' }, a: 'NORMAL', b: 'NORMAL', c: 'NORMAL' },
+  PROFILE_1: { name: { en: 'PROFILE 1: Facial Paresis (Left-sided)', nl: 'PROFIEL 1: Gezichtsverlamming (Linkszijdig)' }, a: 'PARESIS', b: 'NORMAL', c: 'NORMAL' },
+  PROFILE_2: { name: { en: 'PROFILE 2: Buccofacial Apraxia', nl: 'PROFIEL 2: Buccofaciale Apraxie' }, a: 'BUCCOFACIAL', b: 'NORMAL', c: 'NORMAL' },
+  PROFILE_3: { name: { en: 'PROFILE 3: Dysarthria', nl: 'PROFIEL 3: Dysartrie' }, a: 'NORMAL', b: 'DYSARTHRIA', c: 'DYSARTHRIA' },
+  PROFILE_4: { name: { en: 'PROFILE 4: Speech Apraxia', nl: 'PROFIEL 4: Spraakapraxie' }, a: 'NORMAL', b: 'APRAXIA', c: 'APRAXIA' },
+  PROFILE_5: { name: { en: 'PROFILE 5: Phonological Disorder', nl: 'PROFIEL 5: Fonologische Stoornis' }, a: 'NORMAL', b: 'NORMAL', c: 'PHONO' },
+  MIXED_A:   { name: { en: 'MIXED A: Speech Apraxia + Mild Facial Asymmetry', nl: 'GEMENGD A: Spraakapraxie + Lichte Gezichtsasymmetrie' }, a: 'MIXED_A', b: 'APRAXIA', c: 'APRAXIA' },
+  MIXED_B:   { name: { en: 'MIXED B: Dysarthria + Minor Buccofacial Noise', nl: 'GEMENGD B: Dysartrie + Licht Buccofaciaal Ruis' }, a: 'MIXED_B', b: 'DYSARTHRIA', c: 'DYSARTHRIA' },
+  MIXED_C:   { name: { en: 'MIXED C: Facial Paresis + Phonological Disorder', nl: 'GEMENGD C: Gezichtsverlamming + Fonologische Stoornis' }, a: 'PARESIS', b: 'NORMAL', c: 'PHONO' },
+  COMBINED:  { name: { en: 'COMBINED: All Disorders (Minimum Time)', nl: 'GECOMBINEERD: Alle Stoornissen (Minimum Tijd)' }, a: 'NORMAL', b: 'NORMAL', c: 'NORMAL' },
+};
+
+const COMBINED_A = {
+  en: [
+    { instruction: 'Purse your lips', expression: 'purse', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_B' },
+    { instruction: 'Smile', expression: 'smile_closed', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_B' },
+    { instruction: 'Smile wide, show your teeth', expression: 'smile_gentle', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Stick out your tongue', expression: 'tongue_out', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Tongue: left corner, then right corner', expression: 'tongue_lr', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Touch upper lip with tongue', expression: 'tongue_up', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,MIXED_A,MIXED_B,MIXED_C' },
+    { instruction: 'Frown', expression: 'frown', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Puff your cheeks', expression: 'puff', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Raise eyebrows: surprised', expression: 'surprised', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Purse lips towards the left', expression: 'asymmetric_purse', profileLabel: 'P1_PARESIS,MIXED_A,MIXED_C' },
+    { instruction: 'Lift right mouth corner more', expression: 'asymmetric_right_smile_closed', profileLabel: 'P1_PARESIS,MIXED_A,MIXED_C' },
+    { instruction: 'Smile wide with right side', expression: 'asymmetric_right_teeth', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Tongue out, tilt to the left', expression: 'tongue_left', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Move tongue to right corner', expression: 'tongue_right', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Frown with your right brow', expression: 'asymmetric_right_frown', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Puff right cheek more', expression: 'asymmetric_right_puff', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Raise right brow', expression: 'asymmetric_right_brow', profileLabel: 'P1_PARESIS,MIXED_C' },
+  ],
+  nl: [
+    { instruction: 'Tuit uw lippen', expression: 'purse', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_B' },
+    { instruction: 'Glimlach', expression: 'smile_closed', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_B' },
+    { instruction: 'Lach breed, laat uw tanden zien', expression: 'smile_gentle', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Steek uw tong uit', expression: 'tongue_out', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Tong: linkerhoek, dan rechterhoek', expression: 'tongue_lr', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Raak bovenlip aan met tong', expression: 'tongue_up', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,MIXED_A,MIXED_B,MIXED_C' },
+    { instruction: 'Frons', expression: 'frown', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Blaas uw wangen op', expression: 'puff', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Wenkbrauwen omhoog alsof verrast', expression: 'surprised', profileLabel: 'NORMAL,P2_BUCCOFACIAL,MIXED_A,MIXED_B' },
+    { instruction: 'Tuit lippen naar links toe', expression: 'asymmetric_purse', profileLabel: 'P1_PARESIS,MIXED_A,MIXED_C' },
+    { instruction: 'Til uw rechter mondhoek op', expression: 'asymmetric_right_smile_closed', profileLabel: 'P1_PARESIS,MIXED_A,MIXED_C' },
+    { instruction: 'Lach breed met uw rechtermondhoek', expression: 'asymmetric_right_teeth', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Steek uw tong uit naar links', expression: 'tongue_left', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Steek uw tong uit naar rechts', expression: 'tongue_right', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Frons met uw rechter wenkbrauw', expression: 'asymmetric_right_frown', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Blaas uw rechterwang meer op', expression: 'asymmetric_right_puff', profileLabel: 'P1_PARESIS,MIXED_C' },
+    { instruction: 'Trek uw rechter wenkbrauw op', expression: 'asymmetric_right_brow', profileLabel: 'P1_PARESIS,MIXED_C' },
+  ],
+};
+
+const COMBINED_B = {
+  en: [
+    { instruction: 'Say 5 times as fast as possible: pa-pa-pa', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { instruction: 'Say 5 times as fast as possible: ta-ta-ta', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { instruction: 'Say 5 times as fast as possible: ka-ka-ka', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { instruction: 'Say 5 times as fast as possible: pa-ta-ka', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P5_PHONO,MIXED_C' },
+    { instruction: 'Say 5 times as fast as possible: ka-pa-ta', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { instruction: 'Say 5 times as fast as possible: ta-pa-ka', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { instruction: 'Say 5 times as fast as possible: pa-ka-ta', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { instruction: 'Say slowly and heavily, repeat as much as you can: pa-pa-pa', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { instruction: 'Say slowly and heavily, repeat as much as you can: ta-ta-ta', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { instruction: 'Say slowly and heavily, repeat as much as you can: ka-ka-ka', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { instruction: 'Say slowly and heavily, repeat as much as you can: pa-ta-ka', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+  ],
+  nl: [
+    { instruction: 'Zeg 5 keer zo snel mogelijk: pa-pa-pa', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { instruction: 'Zeg 5 keer zo snel mogelijk: ta-ta-ta', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { instruction: 'Zeg 5 keer zo snel mogelijk: ka-ka-ka', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { instruction: 'Zeg 5 keer zo snel mogelijk: pa-ta-ka', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P5_PHONO,MIXED_C' },
+    { instruction: 'Zeg 5 keer zo snel mogelijk: ka-pa-ta', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { instruction: 'Zeg 5 keer zo snel mogelijk: ta-pa-ka', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { instruction: 'Zeg 5 keer zo snel mogelijk: pa-ka-ta', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { instruction: 'Zeg langzaam en zwaar, herhaal zo veel mogelijk: pa-pa-pa', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { instruction: 'Zeg langzaam en zwaar, herhaal zo veel mogelijk: ta-ta-ta', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { instruction: 'Zeg langzaam en zwaar, herhaal zo veel mogelijk: ka-ka-ka', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { instruction: 'Zeg langzaam en zwaar, herhaal zo veel mogelijk: pa-ta-ka', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+  ],
+};
+
+const COMBINED_C = {
+  en: [
+    { word: 'Bus', instruction: 'Say: Bus', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Chest', instruction: 'Say: Chest', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Spoon', instruction: 'Say: Spoon', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Wrist', instruction: 'Say: Wrist', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Hammer', instruction: 'Say: Hammer', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Adventure', instruction: 'Say: Adventure', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Spaghetti', instruction: 'Say: Spaghetti', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Handwriting', instruction: 'Say: Handwriting', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Pus', instruction: 'Say: Pus', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Cheft', instruction: 'Say: Cheft', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Spoom', instruction: 'Say: Spoom', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Wrift', instruction: 'Say: Wrift', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Hammel', instruction: 'Say: Hammel', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Advencher', instruction: 'Say: Advencher', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Spaghenti', instruction: 'Say: Spaghenti', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Handriting', instruction: 'Say: Handriting', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Bus', instruction: 'Say slowly and heavily: Bus', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Chest', instruction: 'Say slowly and heavily: Chest', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Spoon', instruction: 'Say slowly and heavily: Spoon', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Wrist', instruction: 'Say slowly and heavily: Wrist', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Hammer', instruction: 'Say slowly and heavily: Hammer', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Adventure', instruction: 'Say slowly and heavily: Adventure', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Spaghetti', instruction: 'Say slowly and heavily: Spaghetti', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Handwriting', instruction: 'Say slowly and heavily: Handwriting', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'But', instruction: 'Say: But', profileLabel: 'P5_PHONO,MIXED_C' },
+    { word: 'Chet', instruction: 'Say: Chet', profileLabel: 'P5_PHONO,MIXED_C' },
+    { word: 'Writ', instruction: 'Say: Writ', profileLabel: 'P5_PHONO,MIXED_C' },
+    { word: 'Taghetti', instruction: 'Say: Taghetti', profileLabel: 'P5_PHONO,MIXED_C' },
+  ],
+  nl: [
+    { word: 'Tak', instruction: 'Zeg: Tak', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Heks', instruction: 'Zeg: Heks', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Knoop', instruction: 'Zeg: Knoop', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Plons', instruction: 'Zeg: Plons', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Hamer', instruction: 'Zeg: Hamer', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Avontuur', instruction: 'Zeg: Avontuur', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Spaghetti', instruction: 'Zeg: Spaghetti', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,P5_PHONO,MIXED_A,MIXED_C' },
+    { word: 'Kleurpotlood', instruction: 'Zeg: Kleurpotlood', profileLabel: 'NORMAL,P1_PARESIS,P2_BUCCOFACIAL,P4_APRAXIA,MIXED_A,MIXED_C' },
+    { word: 'Pak', instruction: 'Zeg: Pak', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Hels', instruction: 'Zeg: Hels', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Snoop', instruction: 'Zeg: Snoop', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Blons', instruction: 'Zeg: Blons', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Hamel', instruction: 'Zeg: Hamel', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Avontul', instruction: 'Zeg: Avontul', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Spaghenti', instruction: 'Zeg: Spaghenti', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Kleupotlood', instruction: 'Zeg: Kleupotlood', profileLabel: 'P4_APRAXIA,MIXED_A' },
+    { word: 'Tak', instruction: 'Zeg langzaam en zwaar: Tak', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Heks', instruction: 'Zeg langzaam en zwaar: Heks', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Knoop', instruction: 'Zeg langzaam en zwaar: Knoop', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Plons', instruction: 'Zeg langzaam en zwaar: Plons', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Hamer', instruction: 'Zeg langzaam en zwaar: Hamer', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Avontuur', instruction: 'Zeg langzaam en zwaar: Avontuur', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Spaghetti', instruction: 'Zeg langzaam en zwaar: Spaghetti', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Kleurpotlood', instruction: 'Zeg langzaam en zwaar: Kleurpotlood', profileLabel: 'P3_DYSARTHRIA,MIXED_B' },
+    { word: 'Tat', instruction: 'Zeg: Tat', profileLabel: 'P5_PHONO,MIXED_C' },
+    { word: 'Hets', instruction: 'Zeg: Hets', profileLabel: 'P5_PHONO,MIXED_C' },
+    { word: 'Tnoop', instruction: 'Zeg: Tnoop', profileLabel: 'P5_PHONO,MIXED_C' },
+    { word: 'Tleurpotlood', instruction: 'Zeg: Tleurpotlood', profileLabel: 'P5_PHONO,MIXED_C' },
+  ],
+};
+
+let state = {
+  pid: '', profileKey: '', profile: null, lang: 'nl', blocks: 'all',
+  camEnabled: false, screenEnabled: false,
+  skipPractice: false,
+  camStreams: [], camRecorders: [], camChunksList: [], camMeta: [],
+  screenStream: null, screenMicStream: null, _screenStreamRaw: null, _screenAudioCtx: null, screenRecorder: null, screenRecordingStartMs: null, screenChunks: [],
+  screenRecordingStartPerfMs: null,
+  _screenMicDest: null,
+  sessionStartTime: null, recordingStartTime: null, sessionTimerInterval: null,
+  sharedMicStream: null, sharedAudioCtx: null, sharedMicDest: null,
+  sharedAudioDelayCompensationS: null,
+  taskQueue: [], taskIndex: 0, paused: false,
+  taskTimerId: null, taskStartTime: null, taskRemainingMs: 0, taskEndTargetTime: null,
+  currentTaskDurationMs: 0,
+  currentExpression: 'neutral', ended: false, _onComplete: null,
+  countdownCancelled: false,
+  taskRunId: 0,
+  taskLog: [],
+  syncToneOffsetMs: null,
+  syncTonePerfOffsetMs: null,
+  syncToneCtxTimeS: null,
+};
+
+let activeTl = null;
+
+function L() { return LANG[state.lang]; }
+
+const $ = (s) => document.querySelector(s);
+const setupScreen = $('#setup-screen');
+const taskScreen = $('#task-screen');
+const sectionBreak = $('#section-break');
+const restOverlay = $('#rest-overlay');
+const endScreen = $('#end-screen');
+const inputPid = $('#input-pid');
+const selectProfile = $('#select-profile');
+const selectLang = $('#select-lang');
+const toggleCam = $('#toggle-cam');
+const toggleScreen = $('#toggle-screen');
+const btnBegin = $('#btn-begin');
+const topProfile = $('#top-profile .lv');
+const topSection = $('#top-section .lv');
+const topTask = $('#top-task .lv');
+const sessionTimerEl = $('#session-timer');
+const recCam = $('#rec-cam');
+const recCam2 = $('#rec-cam2');
+const recCam3 = $('#rec-cam3');
+const recScr = $('#rec-scr');
+const faceContainer = $('#face-container');
+const faceGlow = $('#face-glow');
+const textCard = $('#text-card');
+const wordCard = $('#word-card');
+const instructionText = $('#instruction-text');
+const seqCounter = $('#seq-counter');
+const bigWord = $('#big-word');
+const subInstruction = $('#sub-instruction');
+const repCounter = $('#rep-counter');
+const progressFill = $('#progress-fill');
+const sectionDots = $('#section-dots');
+const statusCue = $('#status-cue');
+const btnPause = $('#btn-pause');
+const btnSkip = $('#btn-skip');
+const btnEnd = $('#btn-end');
+const breakTitle = $('#break-title');
+const breakDesc = $('#break-desc');
+const btnContinue = $('#btn-continue');
+
+inputPid.addEventListener('input', () => { btnBegin.disabled = !inputPid.value.trim(); });
+btnBegin.addEventListener('click', startSession);
+
+document.addEventListener('keydown', (e) => {
+  const taskScreenVisible = taskScreen && taskScreen.style.display !== 'none';
+  if (!taskScreenVisible) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    btnPause.click();
+  } else if (e.code === 'ArrowRight') {
+    e.preventDefault();
+    btnSkip.click();
+  } else if (e.code === 'Escape') {
+    e.preventDefault();
+    btnEnd.click();
+  }
+});
+
+/**
+ * Re-populate voice dropdown when language changes.
+ */
+selectLang.addEventListener('change', () => { populateVoiceDropdown(); });
+
+toggleScreen.addEventListener('change', async function () {
+  if (this.checked) {
+    const micSelectEl = $('#mic-select');
+    const micId = (micSelectEl && micSelectEl.value) ? micSelectEl.value : null;
+    const rawAudioConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+    const micAudioConstraints = micId
+      ? { ...rawAudioConstraints, deviceId: { exact: micId } }
+      : rawAudioConstraints;
+
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: micAudioConstraints,
+        video: false,
+      });
+      state.screenMicStream = micStream;
+    } catch (_) {
+      showToast('Microphone permission denied — screen will record without audio');
+    }
+
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30 } },
+        audio: true,
+        preferCurrentTab: true,
+      });
+
+      const tabAudioTracks = screenStream.getAudioTracks();
+      const micAudioTracks = state.screenMicStream ? state.screenMicStream.getAudioTracks() : [];
+      let combinedAudioTrack = null;
+
+      if (tabAudioTracks.length > 0 && micAudioTracks.length > 0) {
+        try {
+          const ctx = state.sharedAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+          if (!state.sharedAudioCtx) {
+            state.sharedAudioCtx = ctx;
+            ctx.resume().catch(() => {});
+          }
+          const dest = ctx.createMediaStreamDestination();
+          state._screenMicDest = dest;
+          const tabSource = ctx.createMediaStreamSource(new MediaStream(tabAudioTracks));
+          const micSource = ctx.createMediaStreamSource(new MediaStream(micAudioTracks));
+
+          const tabGain = ctx.createGain();
+          tabGain.gain.value = 0.85;
+          tabSource.connect(tabGain);
+          tabGain.connect(dest);
+
+          const micGain = ctx.createGain();
+          micGain.gain.value = 0.75;
+          micSource.connect(micGain);
+          micGain.connect(dest);
+
+          combinedAudioTrack = dest.stream.getAudioTracks()[0];
+          state._screenAudioCtx = null;
+        } catch (_) {
+          combinedAudioTrack = tabAudioTracks[0] || micAudioTracks[0];
+        }
+      } else if (tabAudioTracks.length > 0) {
+        combinedAudioTrack = tabAudioTracks[0];
+      } else if (micAudioTracks.length > 0) {
+        combinedAudioTrack = micAudioTracks[0];
+      }
+
+      const tracks = [
+        ...screenStream.getVideoTracks(),
+        ...(combinedAudioTrack ? [combinedAudioTrack] : []),
+      ];
+
+      state.screenStream = new MediaStream(tracks);
+      state._screenStreamRaw = screenStream;
+    } catch (_) {
+      this.checked = false;
+      if (state.screenMicStream) {
+        state.screenMicStream.getTracks().forEach(t => t.stop());
+        state.screenMicStream = null;
+      }
+      state._screenMicDest = null;
+      showToast('Screen capture unavailable or cancelled');
+    }
+  } else {
+    if (state.screenMicStream) {
+      state.screenMicStream.getTracks().forEach(t => t.stop());
+      state.screenMicStream = null;
+    }
+    state._screenMicDest = null;
+    if (state._screenStreamRaw) {
+      state._screenStreamRaw.getTracks().forEach(t => t.stop());
+      state._screenStreamRaw = null;
+    }
+    if (state.screenStream) {
+      state.screenStream.getTracks().forEach(t => t.stop());
+      state.screenStream = null;
+    }
+  }
+});
+
+/* Preview the selected voice with a short sample */
+document.getElementById('btn-preview-voice').addEventListener('click', () => {
+  if (!window.speechSynthesis) return;
+  const langSel = document.getElementById('select-lang');
+  const sample = (langSel && langSel.value === 'nl')
+    ? 'Hallo, dit is een voorbeeld van mijn stem.'
+    : 'Hello, this is how I will sound during the session.';
+  speak(sample);
+});
+
+const camSlots = [
+  { slotIndex: 0, grantedDeviceId: null, label: null },
+  { slotIndex: 1, grantedDeviceId: null, label: null },
+];
+
+function makeSlotTestBtn(deviceId) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn-test-cam'; b.textContent = 'Test';
+  b.addEventListener('click', () => previewCamera(deviceId, b));
+  return b;
+}
+
+function makeSlotRevokeBtn(slot, cb, nameSpan, row) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn-test-cam';
+  b.style.cssText = 'background:#7f1d1d;color:#fca5a5;';
+  b.textContent = 'Revoke';
+  b.addEventListener('click', () => {
+    slot.grantedDeviceId = null;
+    slot.label = null;
+    cb.disabled = true; cb.checked = false;
+    delete cb.dataset.deviceId;
+    nameSpan.textContent = 'Camera ' + (slot.slotIndex + 1) + ' — (not assigned)';
+    const btns = row.querySelectorAll('.btn-test-cam');
+    btns.forEach(btn => { if (btn !== b) btn.remove(); });
+    b.replaceWith(makeSlotGrantBtn(slot, cb, nameSpan, row));
+  });
+  return b;
+}
+
+function makeSlotGrantBtn(slot, cb, nameSpan, row) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'btn-test-cam';
+  b.style.cssText = 'background:#14532d;color:#86efac;border-color:#166534;';
+  b.textContent = 'Grant Access';
+  b.addEventListener('click', async () => {
+    b.textContent = 'Waiting…'; b.disabled = true;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const grantedId = s.getVideoTracks()[0].getSettings().deviceId;
+      s.getTracks().forEach(t => t.stop());
+      const conflict = camSlots.find(
+        other => other.slotIndex !== slot.slotIndex && other.grantedDeviceId === grantedId
+      );
+      if (conflict) {
+        b.textContent = 'Already used in Camera ' + (conflict.slotIndex + 1);
+        b.style.cssText = 'background:#78350f;color:#fde68a;';
+        setTimeout(() => {
+          b.textContent = 'Grant Access';
+          b.style.cssText = 'background:#14532d;color:#86efac;border-color:#166534;';
+          b.disabled = false;
+        }, 2500);
+        return;
+      }
+      const freshDevs = await navigator.mediaDevices.enumerateDevices();
+      const freshCam = freshDevs.find(d => d.deviceId === grantedId);
+      const realLabel = freshCam && freshCam.label ? freshCam.label : null;
+      slot.grantedDeviceId = grantedId;
+      slot.label = realLabel;
+      cb.dataset.deviceId = grantedId;
+      cb.disabled = false; cb.checked = true;
+      nameSpan.textContent = 'Camera ' + (slot.slotIndex + 1) + (realLabel ? ' — ' + realLabel : '');
+      const revokeBtn = makeSlotRevokeBtn(slot, cb, nameSpan, row);
+      const testBtn = makeSlotTestBtn(grantedId);
+      b.replaceWith(revokeBtn);
+      revokeBtn.insertAdjacentElement('afterend', testBtn);
+    } catch (_) {
+      b.textContent = 'Denied / Cancelled';
+      b.style.cssText = 'background:#7f1d1d;color:#fca5a5;';
+      setTimeout(() => {
+        b.textContent = 'Grant Access';
+        b.style.cssText = 'background:#14532d;color:#86efac;border-color:#166534;';
+        b.disabled = false;
+      }, 2000);
+    }
+  });
+  return b;
+}
+
+function renderSlotRow(slot, listEl) {
+  const row = document.createElement('div');
+  row.className = 'cam-item';
+  row.dataset.slotIndex = slot.slotIndex;
+  const lbl = document.createElement('label');
+  lbl.className = 'cam-check-label';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox'; cb.className = 'cam-checkbox';
+  cb.disabled = !slot.grantedDeviceId;
+  cb.checked = !!slot.grantedDeviceId;
+  if (slot.grantedDeviceId) cb.dataset.deviceId = slot.grantedDeviceId;
+  lbl.appendChild(cb);
+  const nameSpan = document.createElement('span');
+  nameSpan.textContent = slot.grantedDeviceId
+    ? 'Camera ' + (slot.slotIndex + 1) + (slot.label ? ' — ' + slot.label : '')
+    : 'Camera ' + (slot.slotIndex + 1) + ' — (not assigned)';
+  lbl.appendChild(nameSpan);
+  row.appendChild(lbl);
+  if (slot.grantedDeviceId) {
+    row.appendChild(makeSlotRevokeBtn(slot, cb, nameSpan, row));
+    row.appendChild(makeSlotTestBtn(slot.grantedDeviceId));
+  } else {
+    row.appendChild(makeSlotGrantBtn(slot, cb, nameSpan, row));
+  }
+  if (listEl) listEl.appendChild(row);
+  return row;
+}
+
+/* Renders camera slots and populates microphone selector */
+async function initCameraPanel() {
+  const listEl = $('#cam-list');
+  const micRow = $('#mic-row');
+  const micSelect = $('#mic-select');
+
+  listEl.innerHTML = '';
+  camSlots.forEach(slot => renderSlotRow(slot, listEl));
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button'; addBtn.className = 'btn-scan';
+  addBtn.style.cssText = 'margin-top:6px;font-size:11px;';
+  addBtn.textContent = '+ Add another camera slot';
+  addBtn.addEventListener('click', () => {
+    if (camSlots.length >= 4) return;
+    const newSlot = { slotIndex: camSlots.length, grantedDeviceId: null, label: null };
+    camSlots.push(newSlot);
+    listEl.insertBefore(renderSlotRow(newSlot, null), addBtn);
+    if (camSlots.length >= 4) addBtn.style.display = 'none';
+  });
+  listEl.appendChild(addBtn);
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    micSelect.innerHTML = '';
+    mics.forEach((mic, i) => {
+      const opt = document.createElement('option');
+      opt.value = mic.deviceId;
+      opt.textContent = mic.label || ('Microphone ' + (i + 1));
+      micSelect.appendChild(opt);
+    });
+    micRow.style.display = mics.length > 0 ? 'flex' : 'none';
+  } catch (_) {}
+}
+
+async function previewCamera(deviceId, btn) {
+  const existing = btn.parentElement.querySelector('.cam-preview');
+  if (existing) {
+    if (existing._stream) existing._stream.getTracks().forEach(t => t.stop());
+    existing.remove();
+    btn.textContent = 'Test';
+    return;
+  }
+  btn.textContent = 'Stop';
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        deviceId: { exact: deviceId },
+        frameRate: { ideal: 30 },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      },
+      audio: false,
+    });
+  } catch (e1) {
+    btn.textContent = 'No access — click Scan';
+    btn.title = 'Grant permission for this camera by clicking Scan and selecting it in the browser popup.';
+    return;
+  }
+  const vid = document.createElement('video');
+  vid.className = 'cam-preview';
+  vid.autoplay = true;
+  vid.muted = true;
+  vid.srcObject = stream;
+  vid._stream = stream;
+  btn.parentElement.appendChild(vid);
+  setTimeout(() => {
+    if (vid.parentElement) { stream.getTracks().forEach(t => t.stop()); vid.remove(); btn.textContent = 'Test'; }
+  }, 8000);
+}
+
+$('#toggle-cam').addEventListener('change', async function () {
+  const panel = $('#cam-panel');
+  if (this.checked) {
+    panel.style.display = 'block';
+    initCameraPanel();
+
+    // Open shared mic stream + AudioContext NOW so it is fully warmed up
+    // by the time Begin is clicked. Mirrors the pattern used by toggleScreen.
+    try {
+      const micSelectEl = $('#mic-select');
+      const audioDelayInput = document.getElementById('input-audio-delay-ms');
+      if (audioDelayInput) {
+        const parsed = parseInt(audioDelayInput.value);
+        if (!isNaN(parsed) && parsed >= 0 && parsed <= 400) {
+          CONFIG.audioDelayCompensationMs = parsed;
+        }
+      }
+      const micId = (micSelectEl && micSelectEl.value) ? micSelectEl.value : null;
+      const rawAudioConstraints = {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      };
+      const micConstraints = micId
+        ? { ...rawAudioConstraints, deviceId: { exact: micId } }
+        : rawAudioConstraints;
+
+      // Close any stale context from a previous session
+      if (state.sharedAudioCtx) { state.sharedAudioCtx.close().catch(() => {}); state.sharedAudioCtx = null; state.sharedMicDest = null; }
+      if (state.sharedMicStream) { state.sharedMicStream.getTracks().forEach(t => t.stop()); state.sharedMicStream = null; }
+
+      const micStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints, video: false });
+      state.sharedMicStream = micStream;
+
+      const actx = new (window.AudioContext || window.webkitAudioContext)();
+      await actx.resume().catch(() => {});
+      const src = actx.createMediaStreamSource(new MediaStream(micStream.getAudioTracks()));
+      const dest = actx.createMediaStreamDestination();
+
+      // Connect to ctx.destination (speakers) with gain=0 so the AudioContext
+      const silentGain = actx.createGain();
+      silentGain.gain.value = 0;
+      src.connect(silentGain);
+      silentGain.connect(actx.destination);
+
+      // Tunable compensation for audio-leads-video (use measured baseLatency
+      // when available, fallback to ~60 ms). Route the recorded audio through
+      // a DelayNode so the audio can be pushed back to better align with video.
+      const VIDEO_ENCODE_PIPELINE_MS = CONFIG.audioDelayCompensationMs;
+      const audioCtxLatencyMs = ((actx.outputLatency || 0) + (actx.baseLatency || 0)) * 1000;
+      const totalDelayS = (VIDEO_ENCODE_PIPELINE_MS - audioCtxLatencyMs) / 1000;
+      const clampedDelayS = Math.max(0.0, Math.min(1.9, totalDelayS));
+      const delayNode = actx.createDelay(2.0);
+      delayNode.delayTime.value = clampedDelayS;
+      src.connect(delayNode);
+      delayNode.connect(dest);
+
+      state.sharedAudioCtx = actx;
+      state.sharedMicDest = dest;
+      state.sharedAudioDelayCompensationS = clampedDelayS;
+    } catch (e) {
+      console.warn('Early mic/AudioContext setup failed:', e);
+    }
+  } else {
+    panel.style.display = 'none';
+    // Clean up if user untoggled camera
+    if (state.sharedMicStream) { state.sharedMicStream.getTracks().forEach(t => t.stop()); state.sharedMicStream = null; }
+    if (state.sharedAudioCtx) { state.sharedAudioCtx.close().catch(() => {}); state.sharedAudioCtx = null; state.sharedMicDest = null; state.sharedAudioDelayCompensationS = null; }
+  }
+});
+
+$('#btn-scan-cams').addEventListener('click', initCameraPanel);
+
+/**
+ * Initialises a new session: sets up state, starts recordings, builds task queue.
+ */
+async function startSession() {
+  btnBegin.disabled = true;
+  btnBegin.textContent = 'Starting…';
+  state.pid = inputPid.value.trim();
+  state.profileKey = selectProfile.value;
+  state.profile = PROFILES[state.profileKey];
+  state.lang = selectLang.value;
+  state.blocks = document.getElementById('select-blocks').value;
+  state.camEnabled = toggleCam.checked;
+  state.screenEnabled = toggleScreen.checked;
+  state.skipPractice = document.getElementById('toggle-skip-practice').checked;
+  state.ended = false;
+
+  const checkedCams = [...document.querySelectorAll('.cam-checkbox:checked')];
+  const recIndicators = [$('#rec-cam'), $('#rec-cam2'), $('#rec-cam3')];
+  if (state.camEnabled && checkedCams.length > 0) {
+    const micSelectEl = $('#mic-select');
+    const micId = (micSelectEl && micSelectEl.value) ? micSelectEl.value : null;
+    const mimeType = getSupportedMimeType();
+    const rawAudioConstraints = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    };
+
+    // Re-open mic if it wasn't set up in the toggle handler
+    // (e.g. if the mic selector was changed after toggle was turned on)
+    if (state.camEnabled && !state.sharedMicDest) {
+      try {
+        const micSelectEl2 = $('#mic-select');
+        const micId2 = (micSelectEl2 && micSelectEl2.value) ? micSelectEl2.value : null;
+        const rawAudioConstraints2 = {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        };
+        const micConstraints2 = micId2
+          ? { ...rawAudioConstraints2, deviceId: { exact: micId2 } }
+          : rawAudioConstraints2;
+        if (state.sharedMicStream) { state.sharedMicStream.getTracks().forEach(t => t.stop()); }
+        if (state.sharedAudioCtx) { state.sharedAudioCtx.close().catch(() => {}); }
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: micConstraints2, video: false });
+          const actx = new (window.AudioContext || window.webkitAudioContext)();
+          await actx.resume().catch(() => {});
+          const src = actx.createMediaStreamSource(new MediaStream(micStream.getAudioTracks()));
+          const dest = actx.createMediaStreamDestination();
+          const silentGain2 = actx.createGain();
+          silentGain2.gain.value = 0;
+          src.connect(silentGain2);
+          silentGain2.connect(actx.destination);
+
+          const VIDEO_ENCODE_PIPELINE_MS_2 = CONFIG.audioDelayCompensationMs;
+          const audioCtxLatencyMs2 = ((actx.outputLatency || 0) + (actx.baseLatency || 0)) * 1000;
+          const totalDelayS2 = (VIDEO_ENCODE_PIPELINE_MS_2 - audioCtxLatencyMs2) / 1000;
+          const clampedDelayS2 = Math.max(0.0, Math.min(1.9, totalDelayS2));
+          const delayNode2 = actx.createDelay(2.0);
+          delayNode2.delayTime.value = clampedDelayS2;
+          src.connect(delayNode2);
+          delayNode2.connect(dest);
+
+          state.sharedMicStream = micStream;
+          state.sharedAudioCtx = actx;
+          state.sharedMicDest = dest;
+          state.sharedAudioDelayCompensationS = clampedDelayS2;
+          // give the audio context a brief warm-up if it was just created
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          console.warn('Fallback mic setup failed:', e);
+        }
+      } catch (e) {
+        console.warn('Fallback mic guard failed:', e);
+      }
+    }
+
+    // Phase 1: Acquire all camera video-only streams before starting any recorder.
+    const acquiredStreams = [];
+    // Acquire camera streams in parallel to reduce capture startup skew
+    const framerateEl = document.getElementById('select-framerate');
+    const targetFrameRate = framerateEl ? parseInt(framerateEl.value) || 30 : 30;
+    const streamPromises = checkedCams.map(camItem => (
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          deviceId: { exact: camItem.dataset.deviceId },
+          frameRate: { ideal: targetFrameRate, min: 24 },
+          width:     { ideal: 1920 },
+          height:    { ideal: 1080 },
+        },
+        audio: false,
+      }).then(stream => ({ status: 'fulfilled', value: { stream, camItem } }))
+       .catch(err => ({ status: 'rejected', reason: err }))
+    ));
+    const streamResults = await Promise.all(streamPromises);
+    for (let i = 0; i < streamResults.length; i++) {
+      const res = streamResults[i];
+      if (res.status === 'fulfilled') {
+        acquiredStreams.push(res.value);
+      } else {
+        showToast('Camera ' + (i + 1) + ' failed: ' + (res.reason && res.reason.name ? res.reason.name : res.reason));
+        acquiredStreams.push(null);
+      }
+    }
+
+    // Phase 2: All streams are live — start recorders immediately so the
+    // shared mic audio (WebAudio clock) is captured consistently for all cams.
+    state.recordingStartTime = Date.now();
+    for (let i = 0; i < acquiredStreams.length; i++) {
+      const acquired = acquiredStreams[i];
+      if (!acquired) continue;
+      const { stream: videoOnlyStream, camItem } = acquired;
+      const settings = videoOnlyStream.getVideoTracks()[0].getSettings();
+      const cameraDeviceName = videoOnlyStream.getVideoTracks()[0].label || null;
+      const chunks = [];
+
+      // Build combined stream: camera video track(s) + shared mic audio track
+      let audioTrack = null;
+      if (state.sharedMicDest && state.sharedMicDest.stream && state.sharedMicDest.stream.getAudioTracks().length > 0) {
+        audioTrack = state.sharedMicDest.stream.getAudioTracks()[0];
+      }
+      const combinedTracks = [...videoOnlyStream.getVideoTracks(), ...(audioTrack ? [audioTrack] : [])];
+      const combined = new MediaStream(combinedTracks);
+
+      const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 10_000_000 });
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+      // capture high-precision anchors immediately before starting
+      const recStartPerfMs = performance.now();
+      const recStartMs = Date.now();
+      recorder.start(100);
+      // Fire sync beep after a short delay so it falls after the first encoder buffer flush.
+      // Use performance.now() anchor for sub-ms accuracy.
+      if (i === 0) {
+        const beepWallMs = Date.now();
+        const beepPerfMs = performance.now();
+        const beepCtxTime = state.sharedAudioCtx ? state.sharedAudioCtx.currentTime : null;
+        playSyncBeep();
+        state.syncToneOffsetMs = beepWallMs - state.recordingStartTime;
+        state.syncTonePerfOffsetMs = beepPerfMs;
+        state.syncToneCtxTimeS = beepCtxTime;
+        try {
+          if (state.camMeta && state.camMeta[0]) {
+            state.camMeta[0].sync_tone_perf_offset_ms = state.syncTonePerfOffsetMs;
+            state.camMeta[0].sync_tone_ctx_time_s = state.syncToneCtxTimeS || null;
+          }
+        } catch (e) {}
+      }
+
+      state.camStreams.push(combined);
+      state.camRecorders.push(recorder);
+      state.camChunksList.push(chunks);
+      state.camMeta.push({
+        deviceLabel: camItem.closest('.cam-item').querySelector('span').textContent,
+        camera_device_name: cameraDeviceName,
+        camera_index: state.camRecorders.length,
+        start_offset_from_first_cam_s: (recStartMs - state.recordingStartTime) / 1000,
+        start_wall_ms: recStartMs,
+        start_perf_ms: recStartPerfMs,
+        grantedWidth: settings.width || null,
+        grantedHeight: settings.height || null,
+        grantedFrameRate: settings.frameRate || null,
+        audio_delay_compensation_s: state.sharedAudioDelayCompensationS || null,
+        audio_ctx_base_latency_s: state.sharedAudioCtx ? state.sharedAudioCtx.baseLatency : null,
+        mimeType,
+        videoBitsPerSecond: 10_000_000,
+        sync_tone_offset_ms: state.syncToneOffsetMs,
+        sync_tone_perf_offset_ms: state.syncTonePerfOffsetMs || null,
+        sync_tone_ctx_time_s: state.syncToneCtxTimeS || null,
+      });
+      if (recIndicators[i]) recIndicators[i].style.display = 'inline';
+    }
+    if (state.camRecorders.length === 0) state.camEnabled = false;
+  } else {
+    state.camEnabled = false;
+  }
+
+  if (state.screenEnabled && state.screenStream) {
+    state.screenChunks = [];
+    const screenMime = getScreenMimeType();
+    state.screenRecorder = new MediaRecorder(state.screenStream, {
+      mimeType: screenMime,
+      videoBitsPerSecond: 8_000_000,
+    });
+    state.screenRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) state.screenChunks.push(e.data);
+    };
+    if (!state.recordingStartTime) state.recordingStartTime = Date.now();
+    // capture perf anchor then start
+    state.screenRecordingStartMs = Date.now();
+    state.screenRecordingStartPerfMs = performance.now();
+    state.screenRecorder.start(100);
+    recScr.style.display = 'inline';
+    // If no camera recorders were started, ensure a sync beep is played
+    // and recorded into the screen pipeline.
+    if (state.camRecorders.length === 0) {
+      playSyncBeep();
+      state.syncToneOffsetMs = Date.now() - state.recordingStartTime;
+    }
+  } else if (state.screenEnabled) {
+    showToast('Screen recording unavailable. Continuing without recording');
+    state.screenEnabled = false;
+  }
+
+  const durInput = document.getElementById('input-task-dur');
+  if (durInput) CONFIG.taskDuration = Math.max(1, Math.min(15, parseInt(durInput.value) || 3));
+
+  const seqRepsInput = document.getElementById('input-seq-reps');
+  const seqRepsVal = seqRepsInput ? parseInt(seqRepsInput.value) : NaN;
+  if (!isNaN(seqRepsVal) && seqRepsVal >= 1 && state.profileKey !== 'COMBINED') {
+    CONFIG.sectionARepeats = seqRepsVal;
+    CONFIG.sectionCRepeats = seqRepsVal;
+  } else {
+    CONFIG.sectionARepeats = 3;
+    CONFIG.sectionCRepeats = 3;
+  }
+
+  setupScreen.style.display = 'none';
+  taskScreen.style.display = 'flex';
+  topProfile.textContent = '';
+  startSessionTimer();
+  buildTaskQueue();
+  buildSectionDots();
+
+  speak(L().sessionBeginning + '.', () => {
+    runNextTask();
+  });
+}
+
+/* Builds the task queue for the COMBINED profile covering all disorders in minimum time */
+function buildCombinedTaskQueue() {
+  state.taskQueue = [];
+  state.taskIndex = 0;
+  const lang = state.lang;
+  const blocks = state.blocks || 'all';
+  const runA = blocks === 'all' || blocks === 'a';
+  const runB = blocks === 'all' || blocks === 'b';
+  const runC = blocks === 'all' || blocks === 'c';
+  const aReps = CONFIG.sectionARepeats;
+  const bReps = CONFIG.sectionBRepeats;
+  const cReps = CONFIG.sectionCRepeats;
+
+  state.taskQueue.push({ type: 'section_break', title: L().baselineTitle, desc: L().baselineDesc, speakIntro: null });
+  state.taskQueue.push({ type: 'baseline', instruction: L().baselineInstruction, speak: L().baselineSpeak, duration: CONFIG.baselineDuration });
+
+  if (runA) {
+    state.taskQueue.push({ type: 'section_break', title: L().sectionATitle, desc: L().sectionADesc, speakIntro: null });
+    const tasks = COMBINED_A[lang];
+    for (let seq = 0; seq < aReps; seq++) {
+      if (seq > 0) {
+        state.taskQueue.push({ type: 'rest', duration: CONFIG.sectionARestPause, text: L().rest });
+        state.taskQueue.push({ type: 'announce', text: L().sequence + ' ' + (seq + 1) + ' ' + L().of + ' ' + aReps + ': ' + L().sequenceBegin });
+      }
+      for (let i = 0; i < tasks.length; i++) {
+        state.taskQueue.push({
+          type: 'facial', section: 'A',
+          instruction: tasks[i].instruction,
+          expression: tasks[i].expression,
+          profileLabel: tasks[i].profileLabel,
+          duration: CONFIG.taskDuration,
+          seqNum: seq + 1, seqTotal: aReps,
+          taskNum: i + 1, taskTotal: tasks.length,
+          dotIdx: seq * tasks.length + i,
+          sequenceRep: seq + 1,
+        });
+      }
+    }
+    state.taskQueue.push({ type: 'section_end', section: 'A' });
+  }
+
+  if (runB) {
+    state.taskQueue.push({ type: 'section_break', title: L().sectionBTitle, desc: L().sectionBDesc, speakIntro: null });
+    const tasks = COMBINED_B[lang];
+    let bIdx = 0;
+    let firstBTaskTagged = false;
+    for (let i = 0; i < tasks.length; i++) {
+      const item = tasks[i];
+      if (item.variants) {
+        const varList = item.variants[lang] || [];
+        for (let v = 0; v < varList.length; v++) {
+          const instr = varList[v];
+          const word = instr.includes(': ') ? instr.split(': ')[1] : instr;
+          const bTask = {
+            type: 'speech', section: 'B',
+            instruction: instr, word: word,
+            profileLabel: item.profileLabel,
+            duration: 8,
+            repNum: 1, repTotal: 1,
+            taskNum: i + 1, taskTotal: tasks.length,
+            dotIdx: bIdx,
+          };
+          if (!firstBTaskTagged) { bTask.isFirstBTask = true; firstBTaskTagged = true; }
+          state.taskQueue.push(bTask);
+          bIdx++;
+        }
+      } else {
+        const instr = item.instruction;
+        const word = instr.includes(': ') ? instr.split(': ')[1] : instr;
+        const bTask = {
+          type: 'speech', section: 'B',
+          instruction: instr, word: word,
+          profileLabel: item.profileLabel,
+          duration: 8,
+          repNum: 1, repTotal: 1,
+          taskNum: i + 1, taskTotal: tasks.length,
+          dotIdx: bIdx,
+        };
+        if (!firstBTaskTagged) { bTask.isFirstBTask = true; firstBTaskTagged = true; }
+        state.taskQueue.push(bTask);
+        bIdx++;
+      }
+    }
+    state.taskQueue.push({ type: 'section_end', section: 'B' });
+  }
+
+  if (runC) {
+    state.taskQueue.push({ type: 'section_break', title: L().sectionCTitle, desc: L().sectionCDesc, speakIntro: null });
+    const tasks = COMBINED_C[lang];
+    for (let seq = 0; seq < cReps; seq++) {
+      if (seq > 0) {
+        state.taskQueue.push({ type: 'rest', duration: CONFIG.sectionARestPause, text: L().rest });
+        state.taskQueue.push({ type: 'announce', text: L().sequence + ' ' + (seq + 1) + ' ' + L().of + ' ' + cReps + ': ' + L().sequenceBegin });
+      }
+      for (let i = 0; i < tasks.length; i++) {
+        if (i > 0) state.taskQueue.push({ type: 'pause', duration: CONFIG.sectionCPause });
+        state.taskQueue.push({
+          type: 'word', section: 'C',
+          instruction: tasks[i].instruction,
+          word: tasks[i].word,
+          profileLabel: tasks[i].profileLabel,
+          duration: CONFIG.taskDuration,
+          seqNum: seq + 1, seqTotal: cReps,
+          repNum: seq + 1, repTotal: cReps,
+          taskNum: i + 1, taskTotal: tasks.length,
+          dotIdx: seq * tasks.length + i,
+          hideWord: false,
+          sequenceRep: seq + 1,
+        });
+      }
+    }
+    state.taskQueue.push({ type: 'section_end', section: 'C' });
+  }
+}
+
+/* Builds the linear task queue including baseline, section breaks, pauses, and all tasks */
+function buildTaskQueue() {
+  state.taskQueue = [];
+  state.taskIndex = 0;
+  const p = state.profile;
+  const lang = state.lang;
+  const blocks = state.blocks || 'all';
+  const runA = blocks === 'all' || blocks === 'a';
+  const runB = blocks === 'all' || blocks === 'b';
+  const runC = blocks === 'all' || blocks === 'c';
+  const aReps = CONFIG.sectionARepeats;
+  const bReps = CONFIG.sectionBRepeats;
+  const cReps = CONFIG.sectionCRepeats;
+  const secA = SECTION_A_DEFS[p.a][lang];
+  const secBDef = SECTION_B_DEFS[p.b];
+  const secB = secBDef[lang];
+  const secCDef = SECTION_C_DEFS[p.c][lang];
+
+  if (state.profileKey === 'COMBINED') {
+    buildCombinedTaskQueue();
+    return;
+  }
+
+  if (!state.skipPractice) {
+    state.taskQueue.push({ type: 'section_break', title: L().practiceTitle, desc: L().practiceDesc, speakIntro: null });
+    state.taskQueue.push({ type: 'practice_facial', instruction: L().practiceFacialInstruction, expression: 'smile_closed', duration: CONFIG.taskDuration, section: 'Practice', taskNum: 1, taskTotal: 3 });
+    state.taskQueue.push({ type: 'practice_speech', instruction: L().practiceSpeechInstruction, word: 'pa-pa-pa', duration: CONFIG.taskDuration, section: 'Practice', taskNum: 2, taskTotal: 3, repNum: 1, repTotal: 1 });
+    state.taskQueue.push({ type: 'practice_word', instruction: L().practiceWordInstruction, word: L().practiceWordDisplay, duration: CONFIG.taskDuration, section: 'Practice', taskNum: 3, taskTotal: 3, repNum: 1, repTotal: 1 });
+    state.taskQueue.push({ type: 'announce', text: L().practiceDone });
+  }
+
+  state.taskQueue.push({ type: 'section_break', title: L().baselineTitle, desc: L().baselineDesc, speakIntro: null });
+  state.taskQueue.push({ type: 'baseline', instruction: L().baselineInstruction, speak: L().baselineSpeak, duration: CONFIG.baselineDuration });
+
+  if (runA) {
+    state.taskQueue.push({ type: 'section_break', title: L().sectionATitle, desc: L().sectionADesc, speakIntro: null });
+
+    for (let seq = 0; seq < aReps; seq++) {
+      if (seq > 0) {
+        state.taskQueue.push({ type: 'rest', duration: CONFIG.sectionARestPause, text: L().rest });
+        state.taskQueue.push({ type: 'announce', text: L().sequence + ' ' + (seq + 1) + ' ' + L().of + ' ' + aReps + ': ' + L().sequenceBegin });
+      }
+      for (let i = 0; i < secA.length; i++) {
+        state.taskQueue.push({
+          type: 'facial', section: 'A',
+          instruction: secA[i].instruction, expression: secA[i].expression,
+          duration: CONFIG.taskDuration,
+          seqNum: seq + 1, seqTotal: aReps,
+          taskNum: i + 1, taskTotal: secA.length,
+          dotIdx: seq * secA.length + i,
+        });
+      }
+    }
+    state.taskQueue.push({ type: 'section_end', section: 'A' });
+  }
+
+  if (runB) {
+    state.taskQueue.push({ type: 'section_break', title: L().sectionBTitle, desc: L().sectionBDesc, speakIntro: null });
+
+    // compute tasks per sequence (variants count as multiple tasks)
+    let totalBTasksPerSeq = 0;
+    for (let i = 0; i < secB.length; i++) {
+      const it = secB[i];
+      if (it.variants) totalBTasksPerSeq += (it.variants[lang] || []).slice(0,3).length;
+      else totalBTasksPerSeq += 1;
+    }
+
+    let firstBTaskTagged = false;
+    for (let seq = 0; seq < bReps; seq++) {
+      if (seq > 0) {
+        state.taskQueue.push({ type: 'rest', duration: CONFIG.sectionARestPause, text: L().rest });
+        state.taskQueue.push({ type: 'announce', text: L().sequence + ' ' + (seq + 1) + ' ' + L().of + ' ' + bReps + ': ' + L().sequenceBegin });
+      }
+
+      let bIdx = seq * totalBTasksPerSeq;
+      for (let i = 0; i < secB.length; i++) {
+        const item = secB[i];
+        if (item.variants) {
+          const varList = item.variants[lang].slice(0, 3);
+          for (let v = 0; v < varList.length; v++) {
+            const instr = varList[v];
+            const word = instr.includes(': ') ? instr.split(': ')[1] : instr;
+            const bTask = {
+              type: 'speech', section: 'B',
+              instruction: instr, word: word,
+              duration: 8,
+              repNum: seq + 1, repTotal: bReps,
+              seqNum: seq + 1, seqTotal: bReps,
+              taskNum: i + 1, taskTotal: secB.length,
+              dotIdx: bIdx,
+            };
+            if (!firstBTaskTagged) { bTask.isFirstBTask = true; firstBTaskTagged = true; }
+            state.taskQueue.push(bTask);
+            bIdx++;
+          }
+        } else {
+          const instr = item.instruction;
+          const word = instr.includes(': ') ? instr.split(': ')[1] : instr;
+          const bTask = {
+            type: 'speech', section: 'B',
+            instruction: instr, word: word,
+            duration: 8,
+            repNum: seq + 1, repTotal: bReps,
+            seqNum: seq + 1, seqTotal: bReps,
+            taskNum: i + 1, taskTotal: secB.length,
+            dotIdx: bIdx,
+          };
+          if (!firstBTaskTagged) { bTask.isFirstBTask = true; firstBTaskTagged = true; }
+          state.taskQueue.push(bTask);
+          bIdx++;
+        }
+      }
+    }
+
+    state.taskQueue.push({ type: 'section_end', section: 'B' });
+  }
+
+  if (runC) {
+    state.taskQueue.push({ type: 'section_break', title: L().sectionCTitle, desc: L().sectionCDesc, speakIntro: null });
+
+    const cWords = secCDef.words;
+    const cType = secCDef.type;
+
+    for (let seq = 0; seq < cReps; seq++) {
+      if (seq > 0) {
+        state.taskQueue.push({ type: 'rest', duration: CONFIG.sectionARestPause, text: L().rest });
+        state.taskQueue.push({ type: 'announce', text: L().sequence + ' ' + (seq + 1) + ' ' + L().of + ' ' + cReps + ': ' + L().sequenceBegin });
+      }
+      for (let i = 0; i < cWords.length; i++) {
+        const word = cType === 'variant' ? cWords[i][seq] : cWords[i];
+        const instr = (cType === 'slow' ? L().saySlow : L().say) + ': ' + word;
+        state.taskQueue.push({
+          type: 'word', section: 'C',
+          instruction: instr, word: word,
+          duration: CONFIG.taskDuration,
+          seqNum: seq + 1, seqTotal: cReps,
+          repNum: null, repTotal: null,
+          taskNum: i + 1, taskTotal: cWords.length,
+          dotIdx: seq * cWords.length + i,
+          hideWord: (p && p.c === 'NORMAL'),
+        });
+      }
+    }
+    state.taskQueue.push({ type: 'section_end', section: 'C' });
+  }
+}
+
+/* Builds the progress dot indicators for the selected task blocks */
+function buildSectionDots() {
+  const p = state.profile;
+  const blocks = state.blocks || 'all';
+  const runA = blocks === 'all' || blocks === 'a';
+  const runB = blocks === 'all' || blocks === 'b';
+  const runC = blocks === 'all' || blocks === 'c';
+  const aReps = CONFIG.sectionARepeats;
+  const bReps = CONFIG.sectionBRepeats;
+  const cReps = CONFIG.sectionCRepeats;
+  let html = '';
+
+  if (state.profileKey === 'COMBINED') {
+    const lang = state.lang;
+    if (runA) {
+      const aTotal = COMBINED_A[lang].length * aReps;
+      html += '<div class="dg"><span class="dl">A</span>';
+      for (let i = 0; i < Math.min(aTotal, 54); i++) html += '<span class="dt" data-s="A" data-i="' + i + '"></span>';
+      html += '</div>';
+    }
+    if (runB) {
+      let bTotal = 0;
+      COMBINED_B[lang].forEach(item => { if (item.variants) bTotal += (item.variants[lang] || []).length; else bTotal += 1; });
+      html += '<div class="dg"><span class="dl">B</span>';
+      for (let i = 0; i < Math.min(bTotal, 60); i++) html += '<span class="dt" data-s="B" data-i="' + i + '"></span>';
+      html += '</div>';
+    }
+    if (runC) {
+      const cTotal = COMBINED_C[lang].length * cReps;
+      html += '<div class="dg"><span class="dl">C</span>';
+      for (let i = 0; i < Math.min(cTotal, 90); i++) html += '<span class="dt" data-s="C" data-i="' + i + '"></span>';
+      html += '</div>';
+    }
+    sectionDots.innerHTML = html;
+    return;
+  }
+
+  if (runA) {
+    const aLen = SECTION_A_DEFS[p.a][state.lang].length;
+    const aTotal = aReps * aLen;
+    html += '<div class="dg"><span class="dl">A</span>';
+    for (let i = 0; i < Math.min(aTotal, 27); i++) html += '<span class="dt" data-s="A" data-i="' + i + '"></span>';
+    html += '</div>';
+  }
+
+  if (runB) {
+    const bItems = SECTION_B_DEFS[p.b][state.lang];
+    let bTotal = 0;
+    for (let i = 0; i < bItems.length; i++) {
+      const it = bItems[i];
+      if (it.variants) bTotal += (it.variants[state.lang] || []).slice(0,3).length;
+      else bTotal += 1;
+    }
+    // multiply by repeats so dots show all sequences
+    const bDisplayTotal = bTotal * bReps;
+    html += '<div class="dg"><span class="dl">B</span>';
+    for (let i = 0; i < Math.min(bDisplayTotal, 60); i++) html += '<span class="dt" data-s="B" data-i="' + i + '"></span>';
+    html += '</div>';
+  }
+
+  if (runC) {
+    const cLen = SECTION_C_DEFS[p.c][state.lang].words.length;
+    const cTotal = cLen * cReps;
+    html += '<div class="dg"><span class="dl">C</span>';
+    for (let i = 0; i < Math.min(cTotal, 24); i++) html += '<span class="dt" data-s="C" data-i="' + i + '"></span>';
+    html += '</div>';
+  }
+
+  sectionDots.innerHTML = html;
+}
+
+/* Marks progress dots as done up to the given index and highlights the current one */
+function updateDots(section, idx) {
+  sectionDots.querySelectorAll('.dt').forEach(d => d.classList.remove('now'));
+  sectionDots.querySelectorAll('.dt[data-s="' + section + '"]').forEach((d, i) => {
+    if (i < idx) d.classList.add('done');
+    else d.classList.remove('done');
+    if (i === idx) d.classList.add('now');
+  });
+}
+
+/* Marks all progress dots for the given section as done and removes the highlight */
+function markSectionDone(section) {
+  sectionDots.querySelectorAll('.dt[data-s="' + section + '"]').forEach(d => {
+    d.classList.add('done');
+    d.classList.remove('now');
+  });
+}
+
+/* Processes the next item in the task queue */
+function runNextTask() {
+  if (state.ended) return;
+  if (state.taskIndex >= state.taskQueue.length) { endSession(); return; }
+  const task = state.taskQueue[state.taskIndex];
+
+  if (task.type === 'rest') { showRest(task.text, task.duration); return; }
+  if (task.type === 'announce') {
+    const myRunId = ++state.taskRunId;
+    speak(task.text, () => { if (state.taskRunId !== myRunId || state.ended) return; state.taskIndex++; runNextTask(); });
+    return;
+  }
+  if (task.type === 'section_break') { showSectionBreak(task.title, task.desc, task.speakIntro); return; }
+  if (task.type === 'section_end') { markSectionDone(task.section); state.taskIndex++; runNextTask(); return; }
+  if (task.type === 'pause') { setTimeout(() => { state.taskIndex++; runNextTask(); }, task.duration); return; }
+  if (task.type === 'baseline') { showBaselineTask(task); return; }
+  if (task.type === 'facial') { showFacialTask(task); return; }
+  if (task.type === 'practice_facial') { showFacialTask(task); return; }
+  if (task.type === 'practice_speech' || task.type === 'practice_word') { showSpeechWordTask(task); return; }
+  showSpeechWordTask(task);
+}
+
+/* Runs the neutral baseline measurement task */
+function showBaselineTask(task) {
+  switchToFace();
+  const myRunId = ++state.taskRunId;
+  topSection.textContent = L().baselineTitle;
+  topTask.textContent = '';
+  instructionText.textContent = task.instruction;
+  seqCounter.textContent = '';
+  setExpression('neutral');
+  showCue('ready');
+  showReadyWhileSpeaking(
+    (onTTSDone) => speak(task.speak, onTTSDone, false, false, () => logTaskEvent('start', task)),
+    () => {
+      if (state.taskRunId !== myRunId || state.ended) return;
+      progressFill.style.transition = 'none';
+      progressFill.style.width = '0%';
+      progressFill.className = 'progress-bar-fill';
+      startTaskTimer(task.duration * 1000, () => {
+        if (state.taskRunId !== myRunId || state.ended) return;
+        logTaskEvent('end', task);
+        faceGlow.className = 'face-glow';
+        state.taskIndex++;
+        runNextTask();
+      });
+    }
+  );
+}
+
+/* Runs a facial expression task with animation and TTS */
+function showFacialTask(task) {
+  switchToFace();
+  const myRunId = ++state.taskRunId;
+  topSection.textContent = L().sectionA;
+  topTask.textContent = task.taskNum + ' ' + L().of + ' ' + task.taskTotal;
+  instructionText.textContent = task.instruction;
+  seqCounter.textContent = task.seqNum != null
+    ? L().sequence + ' ' + task.seqNum + ' ' + L().of + ' ' + task.seqTotal + '  \u2022  ' + L().task + ' ' + task.taskNum + ' ' + L().of + ' ' + task.taskTotal
+    : '';
+  updateDots('A', task.dotIdx);
+  hideCue();
+
+  setExpression(task.expression);
+
+  showCue('ready');
+  showReadyWhileSpeaking(
+    (onTTSDone) => speak(task.instruction, onTTSDone, false, false, () => logTaskEvent('start', task)),
+    () => {
+      if (state.taskRunId !== myRunId || state.ended) return;
+      progressFill.style.transition = 'none';
+      progressFill.style.width = '0%';
+      progressFill.className = 'progress-bar-fill';
+      const taskDur = isSlowInstruction(task.instruction) ? 5000 : task.duration * 1000;
+      startTaskTimer(taskDur, () => {
+        if (state.taskRunId !== myRunId || state.ended) return;
+        logTaskEvent('end', task);
+        faceGlow.className = 'face-glow';
+        setExpression('neutral');
+        setTimeout(() => {
+          if (state.taskRunId !== myRunId || state.ended) return;
+          state.taskIndex++;
+          runNextTask();
+        }, CONFIG.animDuration + 200);
+      });
+    }
+  );
+}
+
+/* Runs a speech or word task showing only the text card */
+function showSpeechWordTask(task) {
+  switchToText();
+  const myRunId = ++state.taskRunId;
+  const sLabel = task.section === 'B' ? L().sectionB : L().sectionC;
+  topSection.textContent = sLabel;
+  topTask.textContent = task.taskNum + ' ' + L().of + ' ' + task.taskTotal;
+
+  const isPractice = task.type === 'practice_speech' || task.type === 'practice_word';
+  const slow = isSlowInstruction(task.instruction);
+  let labelText = L().say;
+  if (slow && task.instruction.includes(':')) {
+    const colonIdx = task.instruction.indexOf(':');
+    labelText = task.instruction.slice(0, colonIdx).trim();
+  } else if (task.section === 'B' && !isPractice) {
+    labelText = L().repeatXTimes;
+  } else {
+    labelText = L().say;
+  }
+
+  const hideWord = !!task.hideWord;
+  if (hideWord && !isPractice) {
+    bigWord.textContent = '';
+    subInstruction.textContent = L().repeatWordCue || labelText;
+    subInstruction.classList.add('cue-large');
+  } else {
+    subInstruction.classList.remove('cue-large');
+    bigWord.textContent = task.word;
+    subInstruction.textContent = labelText;
+  }
+
+  if (task.seqNum) {
+    repCounter.textContent = L().sequence + ' ' + task.seqNum + ' ' + L().of + ' ' + task.seqTotal + '  •  ' + L().task + ' ' + task.taskNum + ' ' + L().of + ' ' + task.taskTotal;
+  } else {
+    repCounter.textContent = L().repetition + ' ' + task.repNum + ' ' + L().of + ' ' + task.repTotal;
+  }
+  updateDots(task.section, task.dotIdx);
+
+  const textBadge = document.getElementById('profile-label-badge-text');
+  if (textBadge) { textBadge.textContent = task.profileLabel || ''; textBadge.style.opacity = '0'; }
+
+  const runTaskStart = () => {
+    progressFill.style.transition = 'none';
+    progressFill.style.width = '0%';
+    progressFill.className = 'progress-bar-fill';
+    wordCard.className = 'word-card active';
+    const taskDur = slow ? 5000 : task.duration * 1000;
+    startTaskTimer(taskDur, () => {
+      if (state.taskRunId !== myRunId || state.ended) return;
+      logTaskEvent('end', task);
+      wordCard.className = 'word-card';
+      state.taskIndex++;
+      runNextTask();
+    });
+  };
+
+  // isPractice already defined above
+  const _logStart = () => logTaskEvent('start', task);
+  if (slow && !isPractice) {
+    const colonIdx = task.instruction.indexOf(':');
+    const prefix = colonIdx >= 0 ? task.instruction.slice(0, colonIdx) : task.instruction;
+    showReadyWhileSpeaking(
+      (onTTSDone) => speakDisordered(prefix, task.word, onTTSDone, _logStart),
+      () => { if (state.taskRunId !== myRunId || state.ended) return; runTaskStart(); }
+    );
+  } else if (isPractice) {
+    showReadyWhileSpeaking(
+      (onTTSDone) => speak(task.instruction, onTTSDone, false, false, _logStart),
+      () => { if (state.taskRunId !== myRunId || state.ended) return; runTaskStart(); }
+    );
+  } else {
+    if (task.section === 'B' && !isPractice) {
+      showReadyWhileSpeaking(
+        (onTTSDone) => {
+          if (task.isFirstBTask) {
+            const prefix = state.lang === 'nl'
+              ? 'Herhaal zo snel als u kunt de volgende reeks 5 keer: '
+              : 'Repeat as fast as you can the following sequence 5 times: ';
+            // Speak prefix at normal/default rate, then speak syllables (with hyphens) at fast syllable rate
+            speak(prefix, () => { speak(task.word, onTTSDone); }, false, false, _logStart);
+          } else {
+            speak(task.word, onTTSDone, false, false, _logStart);
+          }
+        },
+        () => { if (state.taskRunId !== myRunId || state.ended) return; runTaskStart(); }
+      );
+    } else {
+      const isFirstCTask = task.section === 'C' && task.seqNum === 1 && task.taskNum === 1;
+      if (isFirstCTask) {
+        showReadyWhileSpeaking(
+          (onTTSDone) => speak(L().repeatWordCue + '. ' + task.word, onTTSDone, false, true, _logStart),
+          () => { if (state.taskRunId !== myRunId || state.ended) return; runTaskStart(); }
+        );
+      } else {
+        showReadyWhileSpeaking(
+          (onTTSDone) => speak(task.word, onTTSDone, false, true, _logStart),
+          () => { if (state.taskRunId !== myRunId || state.ended) return; runTaskStart(); }
+        );
+      }
+    }
+  }
+}
+
+/* Switches display to the SVG face and hides the text card */
+function switchToFace() {
+  textCard.classList.remove('visible');
+  textCard.style.display = 'none';
+  faceContainer.classList.remove('hidden');
+  faceContainer.style.display = 'flex';
+  const tb = document.getElementById('profile-label-badge-text');
+  if (tb) { tb.textContent = ''; tb.style.opacity = '0'; }
+}
+
+/* Switches display to the text card and hides the SVG face */
+function switchToText() {
+  faceContainer.classList.add('hidden');
+  faceContainer.style.display = 'none';
+  faceGlow.className = 'face-glow';
+  textCard.style.display = 'flex';
+  textCard.classList.add('visible');
+  const fb = document.getElementById('profile-label-badge');
+  if (fb) { fb.textContent = ''; fb.style.opacity = '0'; }
+}
+
+/* Shows the rest overlay between Section A sequences */
+function showRest(text, durationMs) {
+  const myRunId = ++state.taskRunId;
+  $('#rest-text').textContent = text;
+  restOverlay.classList.add('visible');
+  setTimeout(() => {
+    if (state.taskRunId !== myRunId || state.ended) return;
+    restOverlay.classList.remove('visible');
+    state.taskIndex++;
+    runNextTask();
+  }, durationMs);
+}
+
+/* Shows the section break overlay with title and description; auto-continue starts after TTS */
+function showSectionBreak(title, desc, speakIntro) {
+  instructionText.textContent = '';
+  seqCounter.textContent = '';
+  setExpression('neutral');
+  faceGlow.className = 'face-glow';
+  hideCue();
+
+  breakTitle.textContent = title;
+  breakDesc.innerHTML = desc;
+  if (title === L().baselineTitle) {
+    breakTitle.style.display = 'none';
+  } else {
+    breakTitle.style.display = 'block';
+  }
+
+  btnContinue.querySelector('.btn-continue-fill').style.width = '0%';
+  btnContinue.style.opacity = '0.5';
+  btnContinue.style.pointerEvents = 'none';
+  btnContinue.querySelector('span').textContent = L().continueBtn;
+
+  sectionBreak._autoContinueCancelled = false;
+  sectionBreak._autoContinueFrameId = null;
+  sectionBreak._autoContinueTimeout = null;
+
+  sectionBreak.classList.add('visible');
+
+  const plainDesc = desc.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  speak(plainDesc, () => {
+    btnContinue.style.opacity = '1';
+    btnContinue.style.pointerEvents = 'auto';
+
+    if (title === L().baselineTitle) {
+      // faster baseline transition for skipped practice or repeated runs
+      sectionBreak._autoContinueTimeout = setTimeout(() => {
+        if (!sectionBreak._autoContinueCancelled) btnContinue.click();
+      }, 800);
+      return;
+    }
+
+    const duration = 5000;
+    const startTs = performance.now();
+    const fillEl = btnContinue.querySelector('.btn-continue-fill');
+
+    function step(now) {
+      const elapsed = now - startTs;
+      const progress = Math.min(1, elapsed / duration);
+      fillEl.style.width = (progress * 100) + '%';
+      if (progress < 1 && !sectionBreak._autoContinueCancelled) {
+        sectionBreak._autoContinueFrameId = requestAnimationFrame(step);
+      } else if (progress >= 1 && !sectionBreak._autoContinueCancelled) {
+        sectionBreak._autoContinueTimeout = setTimeout(() => {
+          if (!sectionBreak._autoContinueCancelled) {
+            btnContinue.click();
+          }
+        }, 1500);
+      }
+    }
+
+    sectionBreak._autoContinueFrameId = requestAnimationFrame(step);
+  });
+}
+
+btnContinue.addEventListener('click', () => {
+  sectionBreak.classList.remove('visible');
+  sectionBreak._autoContinueCancelled = true;
+  if (sectionBreak._autoContinueFrameId) cancelAnimationFrame(sectionBreak._autoContinueFrameId);
+  if (sectionBreak._autoContinueTimeout) clearTimeout(sectionBreak._autoContinueTimeout);
+  window.speechSynthesis.cancel();
+
+  let nextContent = null;
+  for (let i = state.taskIndex + 1; i < state.taskQueue.length; i++) {
+    const t = state.taskQueue[i];
+    if (['facial','speech','word','practice_facial','practice_speech','practice_word','baseline'].includes(t.type)) {
+      nextContent = t;
+      break;
+    }
+  }
+  const isTextSection = nextContent && ['speech','word','practice_speech','practice_word'].includes(nextContent.type);
+  if (isTextSection) {
+    switchToText();
+    bigWord.textContent = '';
+    subInstruction.textContent = '';
+    repCounter.textContent = '';
+  } else {
+    switchToFace();
+    setExpression('neutral');
+    instructionText.textContent = '';
+    seqCounter.textContent = '';
+  }
+
+  state.taskIndex++;
+  runNextTask();
+});
+
+/* Shows GET READY as an animated progress bar and then GO then calls onGo */
+function showReadyCountdown(onGo, duration = CONFIG.readyCueDuration) {
+  state.countdownCancelled = false;
+  const cue = statusCue;
+  cue.textContent = L().getReady;
+  cue.className = 'ready';
+  setTimeout(() => {
+    if (state.countdownCancelled) return;
+    if (onGo) onGo();
+    cue.textContent = L().go;
+    cue.className = 'go';
+    setTimeout(() => { if (!state.countdownCancelled) cue.className = 'hide'; }, 600);
+  }, duration);
+}
+
+/* Shows the GET READY cue with an inner ready-bar that animates while TTS plays.
+   speakFn is called with a callback (onTTSDone) which must be invoked when TTS ends.
+   onGo is called immediately when TTS finishes (after snapping the fill to 100%). */
+function showReadyWhileSpeaking(speakFn, onGo) {
+  state.countdownCancelled = false;
+  const cue = statusCue;
+  cue.textContent = L().getReady;
+  cue.className = 'ready';
+  speakFn(() => {
+    if (state.countdownCancelled) return;
+    if (onGo) onGo();
+    cue.textContent = L().go;
+    cue.className = 'go';
+    setTimeout(() => { if (!state.countdownCancelled) cue.className = 'hide'; }, 600);
+  });
+}
+
+/* Shows the status cue badge (get-ready or go) */
+function showCue(type) {
+  if (type === 'ready') {
+    statusCue.textContent = L().getReady;
+    statusCue.className = 'ready';
+    progressFill.className = 'progress-bar-fill ready';
+    progressFill.style.transition = 'none';
+    progressFill.style.width = '100%';
+  } else if (type === 'go') {
+    statusCue.textContent = L().go;
+    statusCue.className = 'go';
+    progressFill.className = 'progress-bar-fill';
+  }
+}
+
+/* Hides the status cue badge */
+function hideCue() {
+  statusCue.className = 'hide';
+}
+
+/* Starts a countdown timer that drives the progress bar and calls onComplete when done */
+function startTaskTimer(durationMs, onComplete) {
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '100%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      progressFill.style.transition = 'width ' + durationMs + 'ms linear';
+      progressFill.style.width = '0%';
+    });
+  });
+
+  state.taskEndTargetTime = null;
+  state.taskStartTime = Date.now();
+  state.taskRemainingMs = durationMs;
+  state.currentTaskDurationMs = durationMs;
+  state._onComplete = onComplete;
+  clearTimeout(state.taskTimerId);
+  state.taskEndTargetTime = Date.now() + durationMs;
+  state.taskTimerId = setTimeout(() => {
+    if (!state.paused && !state.ended) onComplete();
+  }, durationMs);
+}
+
+/* Toggles pause state, freezing/resuming the current task timer */
+btnPause.addEventListener('click', () => {
+  if (state.paused) {
+    state.paused = false;
+    btnPause.innerHTML = '&#x23F8; Pause';
+    const remaining = state.taskRemainingMs;
+    if (remaining > 0 && state._onComplete) {
+      const pct = Math.max(0, Math.min(100, (remaining / state.currentTaskDurationMs) * 100));
+      progressFill.style.transition = 'none';
+      progressFill.style.width = pct + '%';
+      state.taskStartTime = Date.now();
+      state.taskEndTargetTime = Date.now() + remaining;
+      clearTimeout(state.taskTimerId);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          progressFill.style.transition = 'width ' + remaining + 'ms linear';
+          progressFill.style.width = '0%';
+        });
+      });
+      state.taskTimerId = setTimeout(() => {
+        if (!state.paused && !state.ended) state._onComplete();
+      }, remaining);
+    }
+  } else {
+    state.paused = true;
+    btnPause.innerHTML = '&#x25B6; Resume';
+    clearTimeout(state.taskTimerId);
+    state.taskRemainingMs = state.taskRemainingMs - (Date.now() - state.taskStartTime);
+    progressFill.style.transition = 'none';
+    const durationMs = state.currentTaskDurationMs || (CONFIG.taskDuration * 1000);
+    progressFill.style.width = Math.max(0, (state.taskRemainingMs / durationMs) * 100) + '%';
+    window.speechSynthesis.cancel();
+  }
+});
+
+/* Skips the current task and advances to the next one */
+btnSkip.addEventListener('click', () => {
+  if (sectionBreak.classList.contains('visible')) {
+    sectionBreak._autoContinueCancelled = true;
+    if (sectionBreak._autoContinueFrameId) cancelAnimationFrame(sectionBreak._autoContinueFrameId);
+    if (sectionBreak._autoContinueTimeout) clearTimeout(sectionBreak._autoContinueTimeout);
+    btnContinue.click();
+    return;
+  }
+
+  state.countdownCancelled = true;
+  // bump run id so any pending timers tied to previous run are ignored
+  state.taskRunId++;
+  clearTimeout(state.taskTimerId);
+  window.speechSynthesis.cancel();
+  state.paused = false;
+  state.taskTimerId = null;
+  state._onComplete = null;
+  btnPause.innerHTML = '&#x23F8; Pause';
+  faceGlow.className = 'face-glow';
+  wordCard.className = 'word-card';
+  hideCue();
+  setExpression('neutral');
+  progressFill.style.transition = 'none';
+  progressFill.style.width = '0%';
+  progressFill.className = 'progress-bar-fill';
+  state.taskIndex++;
+  runNextTask();
+});
+
+/* Ends the session after user confirmation */
+btnEnd.addEventListener('click', () => {
+  if (confirm('End this session now?')) {
+    clearTimeout(state.taskTimerId);
+    window.speechSynthesis.cancel();
+    endSession();
+  }
+});
+
+const ALL_MOUTHS = '#m-neutral, #m-smile-closed, #m-asym-smile-closed, #m-smile, #m-teeth, #m-frown, #m-surprised, #m-purse, #m-open, #m-puff, #m-asym, #m-asym-purse, #m-asym-teeth, #m-asym-puff';
+const ALL_ANIM = ALL_MOUTHS + ', #tongue, #cheek-l, #cheek-r, #sclera-l, #sclera-r, #brow-l, #brow-r, #blush-l, #blush-r, #nasolabial-l, #nasolabial-r, #dimple-l, #dimple-r, #furrow-l, #furrow-r';
+
+/**
+ * Animate the SVG face to the target expression using crossfade
+ * and attribute animation. Handles asymmetric mouth cases.
+ * @param {string} name - Expression name to apply
+ */
+function setExpression(name) {
+  if (activeTl) { activeTl.pause(); activeTl = null; }
+  anime.remove(ALL_ANIM);
+
+  const dur = CONFIG.animDuration;
+  const ease = CONFIG.animEasing;
+  const fade = dur * 0.25;
+
+  anime({ targets: ALL_MOUTHS, opacity: 0, duration: fade, easing: ease });
+  anime({ targets: '#tongue', opacity: 0, cx: 200, cy: 308, rx: 16, ry: 10, duration: fade, easing: ease });
+  anime({ targets: '#cheek-l', rx: 5, ry: 5, opacity: 0, duration: fade, easing: ease });
+  anime({ targets: '#cheek-r', rx: 5, ry: 5, opacity: 0, duration: fade, easing: ease });
+  anime({ targets: '#sclera-l, #sclera-r', ry: 18, duration: dur, easing: ease });
+  anime({ targets: '#brow-l', translateY: 0, rotate: 0, duration: dur, easing: ease });
+  anime({ targets: '#brow-r', translateY: 0, rotate: 0, duration: dur, easing: ease });
+  anime({ targets: '#blush-l, #blush-r', opacity: 0, duration: fade, easing: ease });
+  anime({ targets: '#nasolabial-l, #nasolabial-r', opacity: 0, duration: fade, easing: ease });
+  anime({ targets: '#dimple-l, #dimple-r', opacity: 0, duration: fade, easing: ease });
+  anime({ targets: '#furrow-l, #furrow-r', opacity: 0, duration: fade, easing: ease });
+
+  const d = dur * 0.15;
+
+  switch (name) {
+    case 'neutral':
+      anime({ targets: '#m-neutral', opacity: 1, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'happy':
+      anime({ targets: '#m-teeth', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 10, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-l', translateY: -4, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -4, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#blush-l, #blush-r', opacity: 0.65, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#nasolabial-l, #nasolabial-r', opacity: 0.5, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#dimple-l, #dimple-r', opacity: 0.7, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'smile_gentle':
+      anime({ targets: '#m-smile', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 14, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-l', translateY: -2, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -2, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#blush-l, #blush-r', opacity: 0.35, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#nasolabial-l, #nasolabial-r', opacity: 0.25, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'smile_closed':
+      anime({ targets: '#m-smile-closed', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 11, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-l', translateY: -4, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -4, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#blush-l, #blush-r', opacity: 0.8, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#nasolabial-l, #nasolabial-r', opacity: 0.65, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#dimple-l, #dimple-r', opacity: 0.8, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'asymmetric_right_smile_closed':
+      anime({ targets: '#m-asym-smile-closed', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-r', ry: 11, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -4, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#blush-r', opacity: 0.8, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#nasolabial-r', opacity: 0.65, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#dimple-r', opacity: 0.8, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'teeth':
+      anime({ targets: '#m-teeth', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 12, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'frown':
+      anime({ targets: '#m-frown', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 11, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-l', translateY: 14, rotate: 28, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: 14, rotate: -28, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#furrow-l, #furrow-r', opacity: 1, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'surprised':
+      anime({ targets: '#m-neutral', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 18, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-l', translateY: -12, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -12, rotate: 0, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'purse':
+      anime({ targets: '#m-purse', opacity: 1, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'tongue_out':
+      anime({ targets: '#m-open', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#tongue', opacity: 1, cx: 200, cy: 322, rx: 18, ry: 14, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'tongue_lr':
+      anime({ targets: '#m-open', opacity: 1, duration: dur, delay: d, easing: ease });
+      activeTl = anime.timeline({ loop: false, easing: 'easeInOutSine' })
+        .add({ targets: '#tongue', opacity: 1, cx: 200, cy: 308, rx: 16, ry: 10, duration: 200, delay: d })
+        .add({ targets: '#tongue', cx: 170, cy: 306, rx: 20, ry: 8, duration: 900 })
+        .add({ targets: '#tongue', cx: 170, cy: 306, duration: 600 })
+        .add({ targets: '#tongue', cx: 230, cy: 306, rx: 20, ry: 8, duration: 1200 })
+        .add({ targets: '#tongue', cx: 230, cy: 306, duration: 600 })
+        .add({ targets: '#tongue', cx: 200, cy: 308, rx: 16, ry: 10, duration: 750 });
+      break;
+
+    case 'tongue_left':
+      anime({ targets: '#m-open', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#tongue', opacity: 1, cx: 170, cy: 306, rx: 20, ry: 8, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'tongue_right':
+      anime({ targets: '#m-open', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#tongue', opacity: 1, cx: 230, cy: 306, rx: 20, ry: 8, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'tongue_up':
+      anime({ targets: '#m-open', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#tongue', opacity: 1, cx: 200, cy: 290, rx: 16, ry: 10, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'puff':
+      anime({ targets: '#m-puff', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#cheek-l', rx: 38, ry: 26, opacity: 0.9, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#cheek-r', rx: 38, ry: 26, opacity: 0.9, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-l, #sclera-r', ry: 12, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-l', translateY: 2, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: 2, rotate: 0, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'asymmetric_right_brow':
+      anime({ targets: '#m-neutral', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -10, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-r', ry: 18, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'asymmetric_purse':
+      anime({ targets: '#m-asym-purse', opacity: 1, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'asymmetric_right_frown':
+      anime({ targets: '#m-frown', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: 14, rotate: -28, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-r', ry: 12, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#furrow-r', opacity: 0.5, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'asymmetric_right_teeth':
+      anime({ targets: '#m-asym-teeth', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-r', ry: 10, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: -5, rotate: 0, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#blush-r', opacity: 0.65, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#nasolabial-r', opacity: 0.5, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#dimple-r', opacity: 0.7, duration: dur, delay: d, easing: ease });
+      break;
+
+    case 'asymmetric_right_puff':
+      anime({ targets: '#m-asym-puff', opacity: 1, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#cheek-r', rx: 38, ry: 26, opacity: 0.9, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#cheek-l', rx: 8, ry: 6, opacity: 0.25, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#sclera-r', ry: 12, duration: dur, delay: d, easing: ease });
+      anime({ targets: '#brow-r', translateY: 2, rotate: 0, duration: dur, delay: d, easing: ease });
+      break;
+  }
+
+  state.currentExpression = name;
+}
+
+/* Normalises text for TTS by replacing typographic characters with speakable equivalents */
+function normalizeTTSText(text, lang) {
+  if (!lang) lang = 'en';
+  if (lang === 'nl') {
+    text = text
+      .replace(/\bpa-pa-pa\b/gi, 'pa, pa, pa')
+      .replace(/\bpa pa pa\b/gi, 'pa, pa, pa')
+      .replace(/\bta-ta-ta\b/gi, 'ta, ta, ta')
+      .replace(/\bta ta ta\b/gi, 'ta, ta, ta')
+      .replace(/\bka-ka-ka\b/gi, 'kaa, kaa, kaa')
+      .replace(/\bka ka ka\b/gi, 'kaa, kaa, kaa')
+      .replace(/\bpa-ta-ka\b/gi, 'pa, ta, kaa')
+      .replace(/\bpa ta ka\b/gi, 'pa, ta, kaa')
+      .replace(/\bka-pa-ta\b/gi, 'kaa, pa, ta')
+      .replace(/\bka pa ta\b/gi, 'kaa, pa, ta')
+      .replace(/\bta-pa-ka\b/gi, 'ta, pa, kaa')
+      .replace(/\bta pa ka\b/gi, 'ta, pa, kaa')
+      .replace(/\bpa-ka-ta\b/gi, 'pa, kaa, ta')
+      .replace(/\bpa ka ta\b/gi, 'pa, kaa, ta')
+      .replace(/\bta-ka-pa\b/gi, 'ta, kaa, pa')
+      .replace(/\bta ka pa\b/gi, 'ta, kaa, pa')
+      .replace(/\bka-ta-pa\b/gi, 'kaa, ta, pa')
+      .replace(/\bka ta pa\b/gi, 'kaa, ta, pa')
+      .replace(/pa\.{2,3}\s*pa\.{2,3}\s*pa/gi, 'pa ...... pa ...... pa')
+      .replace(/ta\.{2,3}\s*ta\.{2,3}\s*ta/gi, 'ta ...... ta ...... ta')
+      .replace(/ka\.{2,3}\s*ka\.{2,3}\s*ka/gi, 'kaa ...... kaa ...... kaa')
+      .replace(/pa\.{2,3}\s*ta\.{2,3}\s*ka/gi, 'pa ...... ta ...... kaa');
+  } else {
+    text = text
+      .replace(/\bpa-pa-pa\b/gi, 'pah... pah... pah')
+      .replace(/\bpa pa pa\b/gi, 'pah... pah... pah')
+      .replace(/\bta-ta-ta\b/gi, 'tah... tah... tah')
+      .replace(/\bta ta ta\b/gi, 'tah... tah... tah')
+      .replace(/\bka-ka-ka\b/gi, 'kah... kah... kah')
+      .replace(/\bka ka ka\b/gi, 'kah... kah... kah')
+      .replace(/\bpa-ta-ka\b/gi, 'pah... tah... kah')
+      .replace(/\bpa ta ka\b/gi, 'pah... tah... kah')
+      .replace(/\bka-pa-ta\b/gi, 'kah... pah... tah')
+      .replace(/\bka pa ta\b/gi, 'kah... pah... tah')
+      .replace(/\bta-pa-ka\b/gi, 'tah... pah... kah')
+      .replace(/\bta pa ka\b/gi, 'tah... pah... kah')
+      .replace(/\bpa-ka-ta\b/gi, 'pah... kah... tah')
+      .replace(/\bpa ka ta\b/gi, 'pah... kah... tah')
+      .replace(/\bta-ka-pa\b/gi, 'tah... kah... pah')
+      .replace(/\bta ka pa\b/gi, 'tah... kah... pah')
+      .replace(/\bka-ta-pa\b/gi, 'kah... tah... pah')
+      .replace(/\bka ta pa\b/gi, 'kah... tah... pah')
+      .replace(/pa\.{2,3}\s*pa\.{2,3}\s*pa/gi, 'pah...... pah...... pah')
+      .replace(/ta\.{2,3}\s*ta\.{2,3}\s*ta/gi, 'tah...... tah...... tah')
+      .replace(/ka\.{2,3}\s*ka\.{2,3}\s*ka/gi, 'kah...... kah...... kah')
+      .replace(/pa\.{2,3}\s*ta\.{2,3}\s*ka/gi, 'pah...... tah...... kah');
+  }
+
+  text = text
+    .replace(/\u2026/g, '... ')
+    .replace(/\u2014/g, ', ')
+    .replace(/\u2013/g, ', ');
+
+  // Fix known TTS mispronunciations
+  if (lang === 'nl') {
+    text = text.replace(/\bSpaghetti\b/g, 'spa-ghetti');
+    text = text.replace(/\bSpaghenti\b/g, 'spa-ghentie');
+  }
+  text = text.replace(/:\s+/g, ': ');
+  text = text.replace(/^(Repeat|Say|Herhaal|Zeg):\s*/i, '$1: , ');
+  text = text.replace(/,\s*,/g, ',');
+
+  return text;
+}
+
+/* Detects whether the instruction text indicates slow/heavy speech for TTS rate adjustment */
+function isSlowInstruction(text) {
+  return /slowly|langzaam|zwaar|heavy|afzwakken/i.test(text);
+}
+
+/* Detects a normal (non-slow) syllable sequence such as pa-pa-pa, ta-ta-ta, ka-ka-ka, pa-ta-ka */
+function isSyllableSequence(text) {
+  return !isSlowInstruction(text) && /\b(pa|ta|ka)-(pa|ta|ka)-(pa|ta|ka)\b/i.test(text);
+}
+
+/* Speaks text aloud using the Web Speech API with appropriate voice and rate */
+function speak(text, onEnd, forceSlow, forceArticulate, onStart) {
+  if (!window.speechSynthesis) { if (onEnd) onEnd(); return; }
+  window.speechSynthesis.cancel();
+
+  const norm = normalizeTTSText(text, state.lang);
+  const slow = (forceSlow !== undefined) ? forceSlow : isSlowInstruction(text);
+  const utter = new SpeechSynthesisUtterance(norm);
+  if (forceArticulate) {
+    utter.pitch = 1.0;
+    utter.rate = 0.72;
+    utter.volume = 1.0;
+  } else if (slow) {
+    utter.pitch = 0.68;
+    utter.rate = 0.34;
+    utter.volume = 1.0;
+  } else if (isSyllableSequence(text)) {
+    utter.pitch = state.lang === 'nl' ? 1.1 : 1.05;
+    utter.rate = CONFIG.ttsRateFast;
+    utter.volume = CONFIG.ttsVolume;
+  } else {
+    utter.pitch = state.lang === 'nl' ? 1.1 : 1.05;
+    utter.rate  = state.lang === 'nl' ? 0.80 : 0.78;
+    utter.volume = CONFIG.ttsVolume;
+  }
+
+  const voices = window.speechSynthesis.getVoices();
+  const langCode = state.lang === 'nl' ? 'nl' : 'en';
+
+  const sel = document.getElementById('select-voice');
+  const chosenName = sel ? sel.value : 'auto';
+  let chosen = null;
+  if (chosenName !== 'auto') {
+    chosen = voices.find(v => v.name === chosenName) || null;
+  }
+  if (!chosen) chosen = findVoice(voices, langCode);
+  if (chosen) {
+    utter.voice = chosen;
+    if (chosen.name.toLowerCase().startsWith('google')) {
+      if (!slow && !isSyllableSequence(text)) {
+        utter.rate = 0.85;
+      }
+    }
+  }
+  utter.lang = state.lang === 'nl' ? 'nl-NL' : 'en-GB';
+
+  utter.onend = () => { if (onEnd) onEnd(); };
+  utter.onerror = () => { if (onEnd) onEnd(); };
+  if (onStart) onStart();   // synchronous: fires when speech is queued, not via utter.onstart which is unreliable in Chrome
+  window.speechSynthesis.speak(utter);
+}
+
+/**
+ * Speaks disordered task instructions as two utterances: instruction modifier then the word.
+ */
+function speakDisordered(instructionModifier, word, onDone, onStart) {
+  if (!window.speechSynthesis) { if (onDone) onDone(); return; }
+
+  // Cancel once upfront, then queue both utterances without calling speak()
+  // so its cancel() call never interrupts the second utterance mid-sequence.
+  window.speechSynthesis.cancel();
+
+  const voices = window.speechSynthesis.getVoices();
+  const langCode = state.lang === 'nl' ? 'nl' : 'en';
+  const sel = document.getElementById('select-voice');
+  const chosenName = sel ? sel.value : 'auto';
+  let chosen = null;
+  if (chosenName !== 'auto') {
+    chosen = voices.find(v => v.name === chosenName) || null;
+  }
+  if (!chosen) chosen = findVoice(voices, langCode);
+
+  // Instruction modifier ("zeg langzaam en zwaar...") at normal speaking rate
+  const modUtter = new SpeechSynthesisUtterance(normalizeTTSText(instructionModifier, state.lang));
+  if (chosen) modUtter.voice = chosen;
+  modUtter.lang = state.lang === 'nl' ? 'nl-NL' : 'en-GB';
+  modUtter.pitch = state.lang === 'nl' ? 1.1 : 1.05;
+  modUtter.rate = chosen && chosen.name.toLowerCase().startsWith('google')
+    ? 0.85
+    : (state.lang === 'nl' ? 0.80 : 0.78);
+  modUtter.volume = CONFIG.ttsVolume;
+
+  const wordUtter = new SpeechSynthesisUtterance(normalizeTTSText(word, state.lang));
+  if (chosen) wordUtter.voice = chosen;
+  wordUtter.lang = state.lang === 'nl' ? 'nl-NL' : 'en-GB';
+  wordUtter.rate = 0.55;
+  wordUtter.pitch = 0.7;
+  wordUtter.volume = CONFIG.ttsVolume;
+  wordUtter.onend = () => { if (onDone) onDone(); };
+  wordUtter.onerror = () => { if (onDone) onDone(); };
+
+  modUtter.onend = () => { window.speechSynthesis.speak(wordUtter); };
+  modUtter.onerror = () => { window.speechSynthesis.speak(wordUtter); };
+
+  if (onStart) onStart();
+  window.speechSynthesis.speak(modUtter);
+}
+
+/* Finds the best available voice, preferring softer/female voices for the given language */
+function findVoice(voices, langCode) {
+  const soft = (name) => {
+    const n = name.toLowerCase();
+    return n.includes('female') || n.includes('fiona') || n.includes('samantha') ||
+           n.includes('karen') || n.includes('moira') || n.includes('tessa') ||
+           n.includes('claire') || n.includes('lotte') || n.includes('ellen') ||
+           n.includes('serena') || n.includes('alice') || n.includes('amelie') ||
+           n.includes('joana') || n.includes('nora') || n.includes('premium') ||
+           n.includes('xander') || n.includes('anna') || n.includes('fem');
+  };
+
+  if (langCode === 'nl') {
+    return voices.find(v => v.name.toLowerCase().includes('google') && (v.lang === 'nl-NL' || v.lang.startsWith('nl')))
+      || voices.find(v => v.lang === 'nl-NL' && soft(v.name))
+      || voices.find(v => v.lang.startsWith('nl'))
+      || null;
+  }
+
+  const exactGoogle = voices.find(v => v.name.toLowerCase() === 'google uk english female');
+  if (exactGoogle) return exactGoogle;
+
+  return voices.find(v => v.name.toLowerCase().startsWith('google') && v.lang === 'en-GB')
+    || voices.find(v => v.name.toLowerCase().startsWith('google') && v.lang === 'en-US')
+    || voices.find(v => v.name.toLowerCase().startsWith('google') && v.lang.startsWith('en'))
+    || voices.find(v => v.lang.startsWith('en-GB') && soft(v.name))
+    || voices.find(v => v.lang.startsWith('en-US') && soft(v.name))
+    || voices.find(v => v.lang.startsWith('en-AU') && soft(v.name))
+    || voices.find(v => v.lang.startsWith('en-GB'))
+    || voices.find(v => v.lang.startsWith('en'))
+    || null;
+}
+
+/* Populates the voice dropdown with available system voices filtered by language */
+function populateVoiceDropdown() {
+  const sel = document.getElementById('select-voice');
+  if (!sel) return;
+  const langSel = document.getElementById('select-lang');
+  const langCode = (langSel && langSel.value === 'nl') ? 'nl' : 'en';
+  const voices = window.speechSynthesis.getVoices();
+  const prev = sel.value;
+  sel.innerHTML = '<option value="auto">Auto (Google neural preferred)</option>';
+  voices
+    .filter(v => v.lang.startsWith(langCode))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.name;
+      opt.textContent = v.name + ' (' + v.lang + ')';
+      sel.appendChild(opt);
+    });
+  if (prev && [...sel.options].some(o => o.value === prev)) {
+    sel.value = prev;
+  } else {
+    const found = findVoice(voices, langCode);
+    if (found) sel.value = found.name;
+  }
+}
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => { populateVoiceDropdown(); };
+  setTimeout(populateVoiceDropdown, 200);
+}
+
+/* Starts the session elapsed-time timer displayed in the top bar */
+function startSessionTimer() {
+  state.sessionStartTime = Date.now();
+  if (!state.recordingStartTime) state.recordingStartTime = state.sessionStartTime;
+  state.sessionTimerInterval = setInterval(() => {
+    sessionTimerEl.textContent = formatTime(Date.now() - state.sessionStartTime);
+  }, 500);
+}
+
+/* Formats milliseconds as MM:SS */
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+/**
+ * Stops recordings, triggers downloads, and shows the end screen.
+ */
+function endSession() {
+  state.ended = true;
+  clearTimeout(state.taskTimerId);
+  clearInterval(state.sessionTimerInterval);
+  window.speechSynthesis.cancel();
+  setExpression('neutral');
+  const elapsed = Date.now() - state.sessionStartTime;
+  const ts = getTimestamp();
+  const mimeType = getSupportedMimeType();
+  const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+  const downloads = [];
+  const csvFile = generateTimestampsBlob(ts);
+  if (csvFile) downloads.push(csvFile);
+  if (state.profileKey === 'COMBINED') {
+    const assemblyFile = generateAssemblyBlob(ts);
+    if (assemblyFile) downloads.push(assemblyFile);
+  }
+
+  const videoPromises = state.camRecorders.map((recorder, i) => new Promise(resolve => {
+    if (recorder.state === 'inactive') {
+      const chunks = state.camChunksList[i];
+      if (!chunks || chunks.length === 0) { resolve(null); return; }
+      const label = state.camRecorders.length > 1 ? '_cam' + (i + 1) : '_cam';
+      const filename = state.pid + label + '_' + ts + '.' + ext;
+      if (state.camMeta[i]) state.camMeta[i].file = filename;
+      resolve({ blob: new Blob(chunks, { type: mimeType }), filename });
+      return;
+    }
+    const label = state.camRecorders.length > 1 ? '_cam' + (i + 1) : '_cam';
+    const filename = state.pid + label + '_' + ts + '.' + ext;
+    recorder.onstop = () => {
+      resolve({ blob: new Blob(state.camChunksList[i], { type: mimeType }), filename });
+    };
+    recorder.stop();
+    state.camStreams[i].getTracks().forEach(t => t.stop());
+    if (state.camMeta[i]) state.camMeta[i].file = filename;
+  }));
+
+  const screenPromise = new Promise(resolve => {
+    if (!state.screenRecorder || state.screenRecorder.state === 'inactive') { resolve(null); return; }
+    state.screenRecorder.onstop = () => {
+      resolve({ blob: new Blob(state.screenChunks, { type: getScreenMimeType() }), filename: state.pid + '_screen_' + ts + '.webm' });
+    };
+    state.screenRecorder.stop();
+    if (state.screenStream) {
+      state.screenStream.getTracks().forEach(t => t.stop());
+    }
+    if (state._screenStreamRaw) {
+      state._screenStreamRaw.getTracks().forEach(t => t.stop());
+      state._screenStreamRaw = null;
+    }
+    if (state.screenMicStream) {
+      state.screenMicStream.getTracks().forEach(t => t.stop());
+      state.screenMicStream = null;
+    }
+    state._screenMicDest = null;
+  });
+
+  const metaPromise = new Promise(resolve => {
+    Promise.all(videoPromises).then(() => {
+      if (state.camMeta.length === 0 && !state.screenRecordingStartMs) { resolve(null); return; }
+      const offset = ((state.sessionStartTime - (state.recordingStartTime || state.sessionStartTime)) / 1000).toFixed(3);
+      state.camMeta.forEach(m => { m.recording_start_offset_s = offset; });
+      const screenMeta = state.screenRecordingStartMs ? {
+        type: 'screen',
+        start_offset_from_session_start_s: ((state.screenRecordingStartMs - state.sessionStartTime) / 1000).toFixed(3),
+        start_perf_ms: state.screenRecordingStartPerfMs || null,
+        audio_ctx_base_latency_s: state.sharedAudioCtx ? state.sharedAudioCtx.baseLatency : null,
+        sync_tone_offset_ms: state.syncToneOffsetMs || null,
+        mimeType: getScreenMimeType(),
+        file: state.pid + '_screen_' + ts + '.webm',
+      } : null;
+      const exportMeta = {
+        cameras: state.camMeta,
+        screen: screenMeta,
+        audio_delay_compensation_s: state.sharedAudioDelayCompensationS || null,
+        audio_ctx_base_latency_s: state.sharedAudioCtx ? (state.sharedAudioCtx.baseLatency || null) : null,
+        sync_tone_offset_ms: state.syncToneOffsetMs || null,
+      };
+      const metaJson = JSON.stringify(exportMeta, null, 2);
+      resolve({
+        blob: new Blob([metaJson], { type: 'application/json' }),
+        filename: state.pid + '_recording_meta_' + ts + '.json',
+      });
+    });
+  });
+
+  taskScreen.style.display = 'none';
+  sectionBreak.classList.remove('visible');
+  restOverlay.classList.remove('visible');
+
+  $('#end-title').textContent = L().endTitle;
+  $('#end-pid').textContent = 'Participant: ' + state.pid;
+  $('#end-profile').textContent = 'Profile: ' + state.profile.name[state.lang];
+  $('#end-duration').textContent = 'Duration: ' + formatTime(elapsed);
+  $('#end-note').textContent = L().endNote;
+  $('#btn-new-session').textContent = L().newSession;
+
+  endScreen.classList.add('visible');
+  speak(L().sessionComplete, null);
+
+  Promise.all([...videoPromises, screenPromise, metaPromise]).then(allFiles => {
+    allFiles.filter(Boolean).forEach(f => downloads.push(f));
+    scheduleDownloads(downloads);
+  });
+  Promise.all(videoPromises).then(() => {
+    if (state.sharedMicStream) {
+      try { state.sharedMicStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+      state.sharedMicStream = null;
+    }
+    if (state.sharedAudioCtx) {
+      try { state.sharedAudioCtx.close().catch(() => {}); } catch (e) {}
+      state.sharedAudioCtx = null;
+    }
+    state.sharedMicDest = null;
+    state._screenMicDest = null;
+  });
+}
+
+/* Returns a formatted timestamp string for file naming */
+function getTimestamp() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+
+/* Logs a task start or end event with timing for CSV export */
+function logTaskEvent(event, task) {
+  const now = (event === 'end' && state.taskEndTargetTime)
+    ? state.taskEndTargetTime
+    : Date.now();
+  const ref = state.recordingStartTime || state.sessionStartTime;
+  const fromStartS = ((now - ref) / 1000).toFixed(3);
+  const wallTime = new Date(now).toTimeString().substring(0, 12);
+  state.taskLog.push({
+    participant_id: state.pid,
+    profile: state.profile ? state.profile.name[state.lang] : '',
+    session_date: new Date(state.sessionStartTime).toISOString().substring(0, 10),
+    section: task.section || 'Baseline',
+    task_number: task.taskNum !== undefined ? task.taskNum : 0,
+    sequence: task.seqNum || task.repNum || '',
+    task_type: task.type || '',
+    label: (task.word || task.instruction || '').substring(0, 80),
+    profile_label: task.profileLabel || '',
+    expression: task.expression || '',
+    event: event,
+    time_from_start_s: fromStartS,
+    wall_time: wallTime,
+    recording_perf_ms: performance.now().toFixed(1),
+    sequence_rep: task.sequenceRep || '',
+  });
+}
+
+/* Groups COMBINED session clips by disorder profile for easy video assembly */
+function generateAssemblyBlob(ts) {
+  if (state.profileKey !== 'COMBINED' || !state.taskLog.length) return null;
+
+  const headers = [
+    'disorder_profile', 'section', 'task_number', 'sequence_rep',
+    'label', 'expression', 'start_s', 'end_s', 'wall_time', 'participant_id', 'session_date'
+  ];
+  const escape = (v) => {
+    const s = String(v === null || v === undefined ? '' : v);
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+
+  const assembledRows = [];
+  const starts = state.taskLog.filter(e => e.event === 'start' && e.profile_label && e.section);
+
+  for (const startEv of starts) {
+    const endEv = state.taskLog.find(ev =>
+      ev.event === 'end' &&
+      ev.section === startEv.section &&
+      ev.task_number === startEv.task_number &&
+      parseFloat(ev.time_from_start_s) > parseFloat(startEv.time_from_start_s)
+    );
+    const profiles = startEv.profile_label.split(',').map(p => p.trim()).filter(Boolean);
+    for (const profile of profiles) {
+      assembledRows.push({
+        disorder_profile: profile,
+        section: startEv.section,
+        task_number: startEv.task_number,
+        sequence_rep: startEv.sequence_rep || '',
+        label: startEv.label,
+        expression: startEv.expression || '',
+        start_s: startEv.time_from_start_s,
+        end_s: endEv ? endEv.time_from_start_s : '',
+        wall_time: startEv.wall_time,
+        participant_id: startEv.participant_id,
+        session_date: startEv.session_date,
+      });
+    }
+  }
+
+  const sectionOrder = { 'Baseline': 0, 'A': 1, 'B': 2, 'C': 3 };
+  assembledRows.sort((a, b) => {
+    if (a.disorder_profile < b.disorder_profile) return -1;
+    if (a.disorder_profile > b.disorder_profile) return 1;
+    const sa = sectionOrder[a.section] ?? 99;
+    const sb = sectionOrder[b.section] ?? 99;
+    if (sa !== sb) return sa - sb;
+    if (Number(a.task_number) !== Number(b.task_number)) return Number(a.task_number) - Number(b.task_number);
+    return Number(a.sequence_rep || 0) - Number(b.sequence_rep || 0);
+  });
+
+  const rows = [headers.join(',')];
+  let lastProfile = null;
+  for (const r of assembledRows) {
+    if (lastProfile !== null && r.disorder_profile !== lastProfile) rows.push('');
+    lastProfile = r.disorder_profile;
+    rows.push(headers.map(h => escape(r[h])).join(','));
+  }
+
+  return { blob: new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' }), filename: state.pid + '_assembly_' + ts + '.csv' };
+}
+
+/* Returns a {blob, filename} for the timestamps CSV, or null if empty */
+function generateTimestampsBlob(ts) {
+  if (!state.taskLog || state.taskLog.length === 0) return null;
+  const headers = [
+    'participant_id','profile','session_date','section',
+    'task_number','sequence','task_type','label',
+    'profile_label','expression','event','time_from_start_s','wall_time',
+    'recording_perf_ms','sequence_rep'
+  ];
+  const escape = (v) => {
+    const s = String(v === null || v === undefined ? '' : v);
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = state.taskLog.map(r => headers.map(h => escape(r[h])).join(','));
+  const csv = headers.join(',') + '\n' + rows.join('\n');
+  return { blob: new Blob([csv], { type: 'text/csv;charset=utf-8;' }), filename: state.pid + '_timestamps_' + ts + '.csv' };
+}
+
+function scheduleDownloads(files) {
+  _sessionFiles = files.filter(Boolean);
+  var panel = document.getElementById('end-files-panel');
+  var storageWarning = document.getElementById('storage-warning');
+  panel.innerHTML = '';
+  if (_sessionFiles.length === 0) return;
+  panel.style.display = 'block';
+
+  var fileEls = _sessionFiles.map(function(f, i) {
+    var row = document.createElement('div');
+    row.className = 'file-row';
+
+    var nameEl = document.createElement('span');
+    nameEl.className = 'file-name';
+    nameEl.textContent = f.filename;
+    nameEl.title = f.filename;
+    row.appendChild(nameEl);
+
+    var statusEl = document.createElement('span');
+    statusEl.className = 'file-status pending';
+    statusEl.textContent = 'queued';
+    row.appendChild(statusEl);
+
+    var btnRe = document.createElement('button');
+    btnRe.className = 'btn-file-action';
+    btnRe.textContent = 'Re-download';
+    btnRe.addEventListener('click', function() { triggerDownload(f.blob, f.filename); });
+    row.appendChild(btnRe);
+
+    if (window.showSaveFilePicker) {
+      var btnSave = document.createElement('button');
+      btnSave.className = 'btn-file-action btn-save-to';
+      btnSave.textContent = 'Save to…';
+      btnSave.addEventListener('click', function() { saveToLocation(f.blob, f.filename, statusEl); });
+      row.appendChild(btnSave);
+    }
+
+    panel.appendChild(row);
+    return { statusEl: statusEl, f: f };
+  });
+
+  _sessionFiles.forEach(function(f, i) {
+    setTimeout(function() {
+      triggerDownload(f.blob, f.filename);
+      var statusEl = fileEls[i].statusEl;
+      statusEl.textContent = '↓ auto-downloaded';
+      statusEl.className = 'file-status';
+    }, i * 350);
+  });
+
+  if (navigator.storage && navigator.storage.estimate) {
+    var totalBytes = _sessionFiles.reduce(function(sum, f) {
+      return sum + (f.blob ? f.blob.size : 0);
+    }, 0);
+    navigator.storage.estimate().then(function(est) {
+      var available = (est.quota || 0) - (est.usage || 0);
+      if (available > 0 && available < totalBytes * 1.5) {
+        storageWarning.textContent =
+          '⚠ Low storage detected. Use “Save to…” to save files to an external drive.';
+        storageWarning.style.display = 'block';
+      }
+    }).catch(function() {});
+  }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() { if (a.parentNode) document.body.removeChild(a); }, 300);
+}
+
+function saveToLocation(blob, filename, statusEl) {
+  if (!window.showSaveFilePicker) {
+    triggerDownload(blob, filename);
+    return;
+  }
+  var ext = filename.split('.').pop();
+  var typeMap = {
+    'webm': 'video/webm', 'mp4': 'video/mp4',
+    'csv': 'text/csv', 'json': 'application/json'
+  };
+  var mimeType = typeMap[ext] || 'application/octet-stream';
+  window.showSaveFilePicker({
+    suggestedName: filename,
+    types: [{ description: 'Session file', accept: { [mimeType]: ['.' + ext] } }]
+  }).then(function(fileHandle) {
+    return fileHandle.createWritable();
+  }).then(function(writable) {
+    return writable.write(blob).then(function() { return writable.close(); });
+  }).then(function() {
+    if (statusEl) { statusEl.textContent = '✓ saved'; statusEl.className = 'file-status'; }
+  }).catch(function(err) {
+    if (err && err.name === 'AbortError') return;
+    if (statusEl) { statusEl.textContent = '⚠ save failed'; statusEl.className = 'file-status error'; }
+  });
+}
+
+/* Returns the best supported video MIME type — prefers MP4, falls back to WebM */
+function getScreenMimeType() {
+  const types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  for (const t of types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return 'video/webm';
+}
+
+function playSyncBeep() {
+  try {
+    // Camera recording beep: inject into shared recording pipeline when available
+    if (state.sharedAudioCtx && state.sharedMicDest) {
+      try {
+        const ctx = state.sharedAudioCtx;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        // Inject only into the recording destination, do NOT also connect to speakers.
+        gain.connect(state.sharedMicDest);
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.7, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12);
+      } catch (e) {
+        console.warn('Shared sync beep failed:', e);
+      }
+    } else {
+      // No shared recording pipeline, play through local AudioContext (speakers)
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      try {
+        ctx.resume().catch(() => {});
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.7, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.12);
+        osc.onended = () => { try { ctx.close(); } catch (e) {} };
+      } catch (e) {
+        try { ctx.close().catch(() => {}); } catch (__) {}
+        console.warn('Local sync beep failed:', e);
+      }
+    }
+
+    // Also inject sync beep directly into screen recording's audio pipeline
+    if (state._screenMicDest && state.sharedAudioCtx) {
+      try {
+        const sctx = state.sharedAudioCtx;
+        const sosc = sctx.createOscillator();
+        const sgain = sctx.createGain();
+        sosc.connect(sgain);
+        sgain.connect(state._screenMicDest);
+        sosc.type = 'sine';
+        sosc.frequency.value = 880;
+        sgain.gain.setValueAtTime(0.7, sctx.currentTime);
+        sgain.gain.exponentialRampToValueAtTime(0.001, sctx.currentTime + 0.12);
+        sosc.start(sctx.currentTime);
+        sosc.stop(sctx.currentTime + 0.12);
+      } catch (e) {
+        console.warn('Screen sync beep injection failed:', e);
+      }
+    }
+  } catch (e) {
+    console.warn('Sync beep failed:', e);
+  }
+}
+
+function getSupportedMimeType() {
+  const mp4Types = ['video/mp4;codecs=avc1', 'video/mp4;codecs=h264', 'video/mp4'];
+  for (const t of mp4Types) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  console.warn('MP4 not supported in this browser; falling back to WebM.');
+  const webmTypes = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+  for (const t of webmTypes) { if (MediaRecorder.isTypeSupported(t)) return t; }
+  return 'video/webm';
+}
+
+/* Resets all state and returns to the setup screen for a new session */
+$('#btn-new-session').addEventListener('click', () => {
+  _sessionFiles.forEach(function(f) {
+    if (f._url) { URL.revokeObjectURL(f._url); }
+  });
+  _sessionFiles = [];
+  var panel = document.getElementById('end-files-panel');
+  if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+  var storageWarning = document.getElementById('storage-warning');
+  if (storageWarning) { storageWarning.style.display = 'none'; storageWarning.textContent = ''; }
+  endScreen.classList.remove('visible');
+  taskScreen.style.display = 'none';
+  setupScreen.style.display = 'block';
+  recCam.style.display = 'none';
+  recCam2.style.display = 'none';
+  recCam3.style.display = 'none';
+  recScr.style.display = 'none';
+  $('#toggle-cam').checked = false;
+  $('#cam-panel').style.display = 'none';
+  $('#cam-list').innerHTML = '';
+  $('#mic-row').style.display = 'none';
+  camSlots.length = 0;
+  camSlots.push(
+    { slotIndex: 0, grantedDeviceId: null, label: null },
+    { slotIndex: 1, grantedDeviceId: null, label: null }
+  );
+  progressFill.style.width = '0%';
+  inputPid.value = '';
+  const seqRepsInput = document.getElementById('input-seq-reps');
+  if (seqRepsInput) seqRepsInput.value = '';
+  const framerateEl = document.getElementById('select-framerate');
+  if (framerateEl) framerateEl.value = '30';
+  CONFIG.sectionARepeats = 3;
+  CONFIG.sectionCRepeats = 3;
+  btnBegin.disabled = true;
+  btnBegin.textContent = 'Begin Session';
+  setExpression('neutral');
+  instructionText.textContent = '';
+  seqCounter.textContent = '';
+  bigWord.textContent = '';
+  subInstruction.textContent = '';
+  repCounter.textContent = '';
+  faceGlow.className = 'face-glow';
+  hideCue();
+  wordCard.className = 'word-card';
+  textCard.style.display = 'none';
+  textCard.classList.remove('visible');
+  faceContainer.classList.remove('hidden');
+  faceContainer.style.display = 'flex';
+  if (state.screenMicStream) {
+    state.screenMicStream.getTracks().forEach(t => t.stop());
+    state.screenMicStream = null;
+  }
+  if (state._screenAudioCtx) {
+    state._screenAudioCtx.close().catch(() => {});
+    state._screenAudioCtx = null;
+  }
+  if (state._screenStreamRaw) {
+    state._screenStreamRaw.getTracks().forEach(t => t.stop());
+    state._screenStreamRaw = null;
+  }
+  if (state.screenStream) {
+    state.screenStream.getTracks().forEach(t => t.stop());
+    state.screenStream = null;
+  }
+  if (state.sharedMicStream) {
+    try { state.sharedMicStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+    state.sharedMicStream = null;
+  }
+  if (state.sharedAudioCtx) {
+    try { state.sharedAudioCtx.close().catch(() => {}); } catch (e) {}
+    state.sharedAudioCtx = null;
+  }
+  state.sharedMicDest = null;
+  $('#toggle-screen').checked = false;
+  const audioDelayInput = document.getElementById('input-audio-delay-ms');
+  if (audioDelayInput) audioDelayInput.value = '100';
+  CONFIG.audioDelayCompensationMs = 100;
+  state = {
+    pid: '', profileKey: '', profile: null, lang: 'nl', blocks: 'all',
+    camEnabled: false, screenEnabled: false, skipPractice: false,
+    camStreams: [], camRecorders: [], camChunksList: [], camMeta: [],
+    screenStream: null, screenMicStream: null, _screenStreamRaw: null, _screenAudioCtx: null, screenRecorder: null, screenRecordingStartMs: null, screenChunks: [],
+    screenRecordingStartPerfMs: null,
+    _screenMicDest: null,
+    sessionStartTime: null, recordingStartTime: null, sessionTimerInterval: null,
+    sharedMicStream: null, sharedAudioCtx: null, sharedMicDest: null,
+    sharedAudioDelayCompensationS: null,
+    taskQueue: [], taskIndex: 0, paused: false,
+    taskTimerId: null, taskStartTime: null, taskRemainingMs: 0, taskEndTargetTime: null,
+    currentTaskDurationMs: 0,
+    currentExpression: 'neutral', ended: false, _onComplete: null,
+    countdownCancelled: false,
+    taskRunId: 0,
+    taskLog: [],
+    syncToneOffsetMs: null,
+    syncTonePerfOffsetMs: null,
+    syncToneCtxTimeS: null,
+  };
+});
+
+/* Shows a brief toast notification to the researcher */
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, 4000);
+}
+
+window.addEventListener('beforeunload', function(e) {
+  var anyActive = state.camRecorders.some(function(r) { return r && r.state === 'recording'; })
+    || (state.screenRecorder && state.screenRecorder.state === 'recording');
+  if (anyActive) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,256 @@
+# Feature configuration for facial motor and speech behavior analysis.
+# Defines blendshapes, landmarks, derived features, and aggregation methods.
+
+mediapipe_settings:
+  min_detection_confidence: 0.5
+  min_tracking_confidence: 0.5
+  max_num_faces: 1
+  refine_landmarks: true
+  output_face_blendshapes: true
+  output_facial_transformation_matrixes: false
+
+blendshapes:
+  eye_region:
+    - eyeBlinkLeft
+    - eyeBlinkRight
+    - eyeLookDownLeft
+    - eyeLookDownRight
+    - eyeLookInLeft
+    - eyeLookInRight
+    - eyeLookOutLeft
+    - eyeLookOutRight
+    - eyeLookUpLeft
+    - eyeLookUpRight
+    - eyeSquintLeft
+    - eyeSquintRight
+    - eyeWideLeft
+    - eyeWideRight
+
+  brow_region:
+    - browDownLeft
+    - browDownRight
+    - browInnerUp
+    - browOuterUpLeft
+    - browOuterUpRight
+
+  cheek_region:
+    - cheekPuff
+    - cheekSquintLeft
+    - cheekSquintRight
+
+  nose_region:
+    - noseSneerLeft
+    - noseSneerRight
+
+  mouth_region:
+    - jawForward
+    - jawLeft
+    - jawRight
+    - jawOpen
+    - mouthClose
+    - mouthFunnel
+    - mouthPucker
+    - mouthLeft
+    - mouthRight
+    - mouthSmileLeft
+    - mouthSmileRight
+    - mouthFrownLeft
+    - mouthFrownRight
+    - mouthDimpleLeft
+    - mouthDimpleRight
+    - mouthStretchLeft
+    - mouthStretchRight
+    - mouthRollLower
+    - mouthRollUpper
+    - mouthShrugLower
+    - mouthShrugUpper
+    - mouthPressLeft
+    - mouthPressRight
+    - mouthLowerDownLeft
+    - mouthLowerDownRight
+    - mouthUpperUpLeft
+    - mouthUpperUpRight
+
+  tongue_region:
+    - tongueOut
+
+activation_ranges:
+  eye_region:
+    eyeBlinkLeft: 0.80
+    eyeBlinkRight: 0.80
+    eyeLookDownLeft: 0.65
+    eyeLookDownRight: 0.65
+    eyeLookInLeft: 0.60
+    eyeLookInRight: 0.60
+    eyeLookOutLeft: 0.60
+    eyeLookOutRight: 0.60
+    eyeLookUpLeft: 0.65
+    eyeLookUpRight: 0.65
+    eyeSquintLeft: 0.55
+    eyeSquintRight: 0.55
+    eyeWideLeft: 0.50
+    eyeWideRight: 0.50
+  brow_region:
+    browDownLeft: 0.40
+    browDownRight: 0.40
+    browInnerUp: 0.50
+    browOuterUpLeft: 0.35
+    browOuterUpRight: 0.35
+  cheek_region:
+    cheekPuff: 0.60
+    cheekSquintLeft: 0.50
+    cheekSquintRight: 0.50
+  nose_region:
+    noseSneerLeft: 0.45
+    noseSneerRight: 0.45
+  mouth_region:
+    jawForward: 0.50
+    jawLeft: 0.50
+    jawRight: 0.50
+    jawOpen: 1.00
+    mouthClose: 0.60
+    mouthFunnel: 0.65
+    mouthPucker: 0.70
+    mouthLeft: 0.55
+    mouthRight: 0.55
+    mouthSmileLeft: 0.70
+    mouthSmileRight: 0.70
+    mouthFrownLeft: 0.50
+    mouthFrownRight: 0.50
+    mouthDimpleLeft: 0.50
+    mouthDimpleRight: 0.50
+    mouthStretchLeft: 0.60
+    mouthStretchRight: 0.60
+    mouthRollLower: 0.55
+    mouthRollUpper: 0.55
+    mouthShrugLower: 0.45
+    mouthShrugUpper: 0.50
+    mouthPressLeft: 0.55
+    mouthPressRight: 0.55
+    mouthLowerDownLeft: 0.65
+    mouthLowerDownRight: 0.65
+    mouthUpperUpLeft: 0.55
+    mouthUpperUpRight: 0.55
+  tongue_region:
+    tongueOut: 0.90
+
+symmetry_pairs:
+  brow:
+    - [browDownLeft, browDownRight]
+    - [browOuterUpLeft, browOuterUpRight]
+  eye:
+    - [eyeBlinkLeft, eyeBlinkRight]
+    - [eyeSquintLeft, eyeSquintRight]
+    - [eyeWideLeft, eyeWideRight]
+  cheek:
+    - [cheekSquintLeft, cheekSquintRight]
+  nose:
+    - [noseSneerLeft, noseSneerRight]
+  mouth:
+    - [mouthSmileLeft, mouthSmileRight]
+    - [mouthFrownLeft, mouthFrownRight]
+    - [mouthDimpleLeft, mouthDimpleRight]
+    - [mouthStretchLeft, mouthStretchRight]
+    - [mouthPressLeft, mouthPressRight]
+    - [mouthLowerDownLeft, mouthLowerDownRight]
+    - [mouthUpperUpLeft, mouthUpperUpRight]
+
+landmark_groups:
+  face_oval: [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109]
+  left_eye: [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+  right_eye: [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
+  left_eyebrow: [70, 63, 105, 66, 107, 55, 65, 52, 53, 46]
+  right_eyebrow: [300, 293, 334, 296, 336, 285, 295, 282, 283, 276]
+  nose: [1, 2, 98, 327, 168, 6, 197, 195, 5, 4, 19, 94, 125, 141, 237, 44, 1, 274, 457, 354]
+  outer_lips: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185]
+  inner_lips: [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191]
+
+derived_features:
+  asymmetry:
+    description: "Absolute difference between left and right blendshape activations"
+    formula: "abs(left - right)"
+    normalize: true
+    
+  asymmetry_ratio:
+    description: "Ratio of asymmetry to total activation"
+    formula: "abs(left - right) / (left + right + epsilon)"
+    epsilon: 0.001
+    
+  activation_intensity:
+    description: "Mean activation of primary blendshapes for a task"
+    formula: "mean(primary_blendshapes)"
+    
+  activation_variability:
+    description: "Standard deviation of activation over time"
+    formula: "std(activation_timeseries)"
+    
+  temporal_derivative:
+    description: "Rate of change of activation"
+    formula: "diff(activation) / diff(time)"
+    
+  peak_amplitude:
+    description: "Maximum activation value in a segment"
+    formula: "max(activation)"
+    
+  time_to_peak:
+    description: "Time from segment start to peak activation"
+    formula: "argmax(activation) * dt"
+    
+  movement_smoothness:
+    description: "Negative of spectral arc length (higher = smoother)"
+    formula: "spectral_arc_length(velocity)"
+
+aggregation_methods:
+  repetition_level:
+    - mean
+    - std
+    - max
+    - min
+    - range
+    - time_to_peak
+    - peak_amplitude
+    
+  task_level:
+    - mean_across_reps
+    - std_across_reps
+    - coefficient_of_variation
+    - consistency_index
+    
+  session_level:
+    - overall_asymmetry
+    - overall_variability
+    - task_group_scores
+
+baseline_statistics:
+  metrics:
+    - mean
+    - std
+    - median
+    - q25
+    - q75
+    - min
+    - max
+  robust_method: "median"
+  outlier_threshold_iqr: 1.5
+
+confidence_thresholds:
+  detection_confidence_min: 0.7
+  tracking_quality_min: 0.6
+  baseline_sample_min: 30
+  repetition_sample_min: 15
+
+fatigue_risk_indicators:
+  description: "Blendshapes most predictive of PVT performance deterioration (Kong et al. 2021). Used by FatigueDriftMonitor for fatigue risk composite and per-feature percent-fatigue computation."
+  blendshapes:
+    - eyeSquintLeft
+    - eyeSquintRight
+    - browInnerUp
+    - eyeBlinkLeft
+    - eyeBlinkRight
+    - jawOpen
+    - browOuterUpLeft
+    - browOuterUpRight
+  per_region_fatigue_norms:
+    brow_raise_pct: 34.51
+    pucker_pct:     29.05
+    smile_pct:      22.96

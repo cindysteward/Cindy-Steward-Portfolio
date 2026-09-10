@@ -1,6 +1,6 @@
 # Welcome to my Porfolio!
 
-Hello! I build systems at the intersection of software engineering, applied machine learning, and scientific research; from production codebases to research pipelines to deployed ML demos. This repository is a collection of my projects across computer vision, generative AI, applied statistics, and general software development, reflecting a background that spans neuroscience research, healthcare software, and engineering.
+Hello! I build systems at the intersection of software engineering, applied machine learning, and scientific research; from production codebases to research pipelines to deployed ML demos. This repository is a collection of my projects across computer vision, generative AI, applied statistics, and general software development, reflecting my background which spans research, engineering, and implementation across different disciplines and domains. 
 
 This portfolio isn't one project. It's a record of how I work across different domains.
 
@@ -11,4 +11,4 @@ This portfolio isn't one project. It's a record of how I work across different d
 - *Software engineering fundamentals*: Config-driven design, CLI tooling, environment setup automation, structured logging, cross-language work (Python, MATLAB, JavaScript)
 - *Breadth and adaptability*:	Game development (Ren'Py, GameMaker), contributing to an existing lab codebase, and picking up new frameworks quickly
 
-Several of these projects were built for a specific academic or event context (a thesis, an outreach demo, a class assignment) rather than as generic showcase pieces. I've kept them close to their original form so the code reflects real constraints and real use, not a cleaned-up portfolio version. This also means some of this work, while authored by me, may be owned by the academic institution it was created during. If you're evaluating this for a specific reason or want more context on any project (design decisions, what I'd do differently now, or how it maps to a specific problem space), I'm happy to walk through it!
+Several of these projects were built for a specific academic or event context (a thesis, a demo, a class assignment) rather than as generic showcase pieces. I've kept them close to their original form so the code reflects real constraints and real use, not a cleaned-up portfolio version. This also means some of this work, while authored by me, may be owned by the academic institution it was created during. If you're evaluating this for a specific reason or want more context on any project (design decisions, what I'd do differently now, or how it maps to a specific problem space), I'm happy to walk through it!
